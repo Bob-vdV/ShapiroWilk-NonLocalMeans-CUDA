@@ -159,8 +159,9 @@ void test(string imagePath)
 
     if (input_mat.empty())
         std::cout << "failed to open img.jpg" << std::endl;
-    else if (NLM_DEBUG)
+    else if (NLM_DEBUG) {
         std::cout << "img.jpg loaded OK" << std::endl;
+    }
 
 	// Convert to grayscale
 	cv::cvtColor(input_mat, gray_mat, cv::COLOR_RGB2GRAY);
@@ -196,11 +197,11 @@ void test(string imagePath)
 int main()
 {
     vector<string> images = {
-        "../images/64x64.png",
-        "../images/128x128.png",
-        "../images/256x256.png",
-        "../images/512x512.png",
-        "../images/1024x1024.png",
+        "../../images/64x64.png",
+        "../../images/128x128.png",
+        "../../images/256x256.png",
+        "../../images/512x512.png",
+        "../../images/1024x1024.png",
     };
 
     for (auto image : images)
