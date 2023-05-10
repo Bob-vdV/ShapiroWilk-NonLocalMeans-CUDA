@@ -22,6 +22,63 @@ void fastHD_NLM()
 {
 }
 
+// Should be identical to MatLab circshift() function.
+// TODO: test this function
+void circularShift(const Mat &inputMat, Mat &outputMat, const int rowOffset, const int ColOffset)
+{
+    const int rows = inputMat.rows;
+    const int cols = inputMat.cols;
+
+    Mat temp = inputMat.clone();
+
+    // Do shift of rows
+    for (int i = 0; i < rows; i++)
+    {
+        temp.row((i + rowOffset + rows) % rows) = inputMat.row(i);
+    }
+
+    outputMat = temp.clone();
+
+    // Do shift of columns
+    for (int j = 0; j < cols; j++)
+    {
+        outputMat.col((j + ColOffset + cols) % cols) = temp.col(j);
+    }
+}
+
+void computePca(const Mat &inputMat, const int windowRadius, const int numDims)
+{
+    const int rows = inputMat.rows;
+    const int cols = inputMat.cols;
+
+    const int numNeighbors = pow(2 * windowRadius + 1, 2);
+
+    // Use vector for three dimensional Matrix
+    vector<Mat> spatialKernel(numNeighbors, Mat(rows, cols, inputMat.type()));
+
+    int n = 0;
+    for (int i = -windowRadius; i < windowRadius; i++)
+    {
+        for (int j = -windowRadius; j < windowRadius; j++)
+        {
+            const size_t dist2 = i * i + j * j;
+            const double weight = exp(-dist2 / 2 / (windowRadius / 2));
+
+            Mat C;
+            circularShift(inputMat, C, i, j);
+            spatialKernel[n] = C * weight;
+
+            n++;
+        }
+    }
+
+    
+
+
+    // TODO: compute without openCV function
+    // PCA()
+}
+
 double compute_psnr(const Mat &baseImage, const Mat &changedImage)
 {
     Mat difference = baseImage.clone();
@@ -55,6 +112,8 @@ int main()
 {
     const string filename = "../../images/mandril.tif";
     const size_t sigma = 100;
+    const int windowRadius = 3;
+    const int numDimensions = 25;
 
     Mat inputImage = imread(filename);
 
@@ -68,10 +127,26 @@ int main()
 
     imshow("original image", inputImage);
     imshow("noisy image", noisyImage);
-    waitKey(0);
 
     // Compute PCA
-    //TODO
+    Mat inputImageFloat;
+    noisyImage.convertTo(inputImageFloat, CV_32FC3, 1 / 255.0);
 
+    imshow("float image", inputImageFloat);
 
+    Mat normalized = inputImageFloat.clone();
+    normalized = normalized - cv::mean(normalized);
+
+    double min, max;
+    cv::minMaxIdx(normalized, &min, &max);
+
+    imshow("Normalized image", normalized);
+
+    computePca(normalized, windowRadius, numDimensions);
+
+    //    cv::PCA pca(normalized, Mat(), cv::PCA::DATA_AS_COL, numDimensions);
+
+    // TODO
+
+    waitKey(0);
 }
