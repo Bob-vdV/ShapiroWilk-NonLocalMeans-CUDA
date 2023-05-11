@@ -22,6 +22,11 @@ void fastHD_NLM()
 {
 }
 
+void kmeans(Mat &inputMat, Mat &outputMat, int clusters){
+    
+
+}
+
 // Should be identical to MatLab circshift() function.
 // TODO: test this function
 void circularShift(const Mat &inputMat, Mat &outputMat, const int rowOffset, const int ColOffset)
@@ -46,37 +51,65 @@ void circularShift(const Mat &inputMat, Mat &outputMat, const int rowOffset, con
     }
 }
 
-void computePca(const Mat &inputMat, const int windowRadius, const int numDims)
+void computePca(const Mat &inputMat, const int windowRadius, const int numDims, Mat &outputMat)
 {
     const int rows = inputMat.rows;
     const int cols = inputMat.cols;
-
+    const int channels = inputMat.channels();
     const int numNeighbors = pow(2 * windowRadius + 1, 2);
 
-    // Use vector for three dimensional Matrix
-    vector<Mat> spatialKernel(numNeighbors, Mat(rows, cols, inputMat.type()));
+
+    int dims[3] = {rows, cols, numNeighbors};
+
+    Mat spatialKernel(3, dims, inputMat.type());
 
     int n = 0;
+    Mat C;
+
     for (int i = -windowRadius; i < windowRadius; i++)
     {
         for (int j = -windowRadius; j < windowRadius; j++)
         {
-            const size_t dist2 = i * i + j * j;
-            const double weight = exp(-dist2 / 2 / (windowRadius / 2));
+            const int dist2 = i * i + j * j;
+            const double weight = exp(-dist2 / 2.0 / (windowRadius / 2.0));
 
-            Mat C;
             circularShift(inputMat, C, i, j);
-            spatialKernel[n] = C * weight;
 
+            Range ranges[3] = {
+                Range::all(),
+                Range::all(),
+                Range(n, n+1)
+            };
+
+
+            /* Hacky workaround for slicing a 3d matrix by reference:
+             * slice it, convert C to rows x cols x 1 and then add C to
+             * the slice instead of setting it. This keeps the reference.
+            */
+            Mat slice = spatialKernel(ranges);
+
+            int dims3d[3] = {rows, cols, 1};
+
+            Mat temp(3, dims3d, C.type());
+            temp.data = C.data;
+
+            slice += temp * weight;
             n++;
         }
     }
 
-    
+    Mat flattened;
 
+    int newShape[2] = {rows * cols, numNeighbors * channels};
+    flattened = spatialKernel.reshape(1, 2, newShape);
 
-    // TODO: compute without openCV function
-    // PCA()
+    flattened = flattened - cv::mean(flattened);
+
+    cv::PCA pca(flattened, noArray(), cv::PCA::DATA_AS_COL, numDims);
+
+    cv::transpose(pca.eigenvectors, outputMat);
+
+    outputMat = outputMat.reshape(0, {rows, cols, numDims});
 }
 
 double compute_psnr(const Mat &baseImage, const Mat &changedImage)
@@ -113,7 +146,9 @@ int main()
     const string filename = "../../images/mandril.tif";
     const size_t sigma = 100;
     const int windowRadius = 3;
-    const int numDimensions = 25;
+    const int pcaDims = 25;
+
+    const int kMeansImgSize = 256;
 
     Mat inputImage = imread(filename);
 
@@ -130,23 +165,26 @@ int main()
 
     // Compute PCA
     Mat inputImageFloat;
-    noisyImage.convertTo(inputImageFloat, CV_32FC3, 1 / 255.0);
+    noisyImage.convertTo(inputImageFloat, CV_64FC3, 1 / 255.0);
 
     imshow("float image", inputImageFloat);
 
     Mat normalized = inputImageFloat.clone();
     normalized = normalized - cv::mean(normalized);
 
-    double min, max;
-    cv::minMaxIdx(normalized, &min, &max);
-
     imshow("Normalized image", normalized);
 
-    computePca(normalized, windowRadius, numDimensions);
+    cout << "Calculating pca...\n";
+    Mat pcaResult;
+    computePca(normalized, windowRadius, pcaDims, pcaResult);
 
-    //    cv::PCA pca(normalized, Mat(), cv::PCA::DATA_AS_COL, numDimensions);
+
+    //TODO: Resize??
+
+    // Compute KMeans clusters
+
 
     // TODO
 
-    waitKey(0);
-}
+    //waitKey(0);
+}  
