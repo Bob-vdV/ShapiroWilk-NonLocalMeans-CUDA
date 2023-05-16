@@ -30,11 +30,11 @@ Cluster=31;
 pcadim=25;
 
 % Clustering
-Apca=compute_pca(I2, K, pcadim);
-pcadim=size(Apca,3);
-Apcares=imresize(Apca,[256 256]);
-Ares=reshape(Apcares,size(Apcares,1)*size(Apcares,2),pcadim);
-Centre=kmeans_recursive(Ares,Cluster);
+Apca=compute_pca(I2, K, pcadim); % rows x cols x pcadim
+pcadim=size(Apca,3); % pcadim = pcadim?
+Apcares=imresize(Apca,[256 256]); % 256 x 256 x pcadim
+Ares=reshape(Apcares,size(Apcares,1)*size(Apcares,2),pcadim); % (256*256) x 25
+Centre=kmeans_recursive(Ares,Cluster); % Cluster x pcadim
 
 % Filtering
 spatialtype='box';     

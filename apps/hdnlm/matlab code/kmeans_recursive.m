@@ -13,7 +13,7 @@ function [Centre, minCentre]=kmeans_recursive(X,K0)
     
     d=size(Centretemp,2);
     Centre=zeros(K0,d);
-    var=zeros(K0,1);
+    var=zeros(K0,1); % K0 x 1
     
     K=K+1;
     
@@ -33,7 +33,7 @@ function [Centre, minCentre]=kmeans_recursive(X,K0)
        else
         K=K+1;                                                       % Incrementing cluster count
             
-        % Populating new cluster centres
+        % Populating new cluster centresn
         Centre(maxindex,:)=Centretemp(1,:); 
         Centre(K,:)=Centretemp(2,:);   
       

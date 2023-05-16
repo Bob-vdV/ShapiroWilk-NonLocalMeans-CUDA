@@ -159,12 +159,13 @@ void test(string imagePath)
 
     if (input_mat.empty())
         std::cout << "failed to open img.jpg" << std::endl;
-    else if (NLM_DEBUG) {
+    else if (NLM_DEBUG)
+    {
         std::cout << "img.jpg loaded OK" << std::endl;
     }
 
-	// Convert to grayscale
-	cv::cvtColor(input_mat, gray_mat, cv::COLOR_RGB2GRAY);
+    // Convert to grayscale
+    cv::cvtColor(input_mat, gray_mat, cv::COLOR_RGB2GRAY);
 
     // show  input image
     if (NLM_DEBUG)
