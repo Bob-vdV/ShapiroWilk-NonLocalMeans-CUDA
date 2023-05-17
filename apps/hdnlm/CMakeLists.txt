@@ -1,5 +1,7 @@
 add_executable(hdnlm
 	main.cpp 
+	pca.hpp
+	pca.cpp
 	kmeans.hpp 
 	kmeans.cpp 
 	fastapprox.hpp

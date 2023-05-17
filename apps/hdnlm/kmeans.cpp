@@ -88,9 +88,13 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
     Mat squared;
     cv::multiply(inputMat, inputMat, squared);
 
+
     Mat Y;
 
     cv::reduce(squared, Y, 1, cv::REDUCE_SUM);
+
+    cout << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
+
 
     int minIdx, maxIdx;
 

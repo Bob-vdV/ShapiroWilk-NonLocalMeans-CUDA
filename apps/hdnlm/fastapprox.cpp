@@ -7,7 +7,7 @@
 using namespace std;
 using namespace cv;
 
-void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center, Mat &guideImage, Mat &outputImage)
+void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center, const Mat &guideImage, Mat &outputImage)
 {
     const int guidedDims = guideImage.size[2];
 
@@ -35,8 +35,7 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
         }
     }
 
-    Mat C1chan;
-    cv::invert(C1, C1chan);
+    Mat C1chan = C1.inv(cv::DECOMP_SVD);
 
     // TODO: Probably very slow, needs to be improved.
     int dims[] = {rows, cols, clusters};
@@ -44,9 +43,7 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
     for (int i = 0; i < clusters; i++)
     {
-        Mat resized;
-
-        cv::resize(center.row(i), resized, Size(guidedDims, 1));
+        Mat resized = center.row(i).reshape(0, {guidedDims, 1});
 
         for (int row = 0; row < rows; row++)
         {
@@ -65,6 +62,7 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
     }
 
     W = -W / (2 * h * h);
+
     cv::exp(W, W);
     Mat Wb = Mat::zeros(rows, cols, type);
 
@@ -96,19 +94,23 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
         Wb += Wt.mul(box);
 
         Mat multiplied = inputImage.clone();
-    
-        for(int row = 0; row < rows; row++){
-            for (int col = 0; col < cols; col++){
+
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
                 multiplied.at<cv::Vec3d>(row, col) *= W.at<double>(row, col, i);
             }
         }
 
-        Mat BBox; 
+        Mat BBox;
         boxFilter(multiplied, S, BBox);
 
         B += Wt.mul(BBox);
     }
     cv::divide(B, Wb, outputImage);
 
-    cout << cv::mean(outputImage);
+    //cout << cv::mean(B) << '\t' << cv::mean(Wb) << '\n';
+    //cout << outputImage.at<Vec3d>(0,0) << '\n';
+    //cout << cv::mean(outputImage) << '\n';
 }

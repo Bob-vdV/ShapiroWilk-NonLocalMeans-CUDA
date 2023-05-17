@@ -8,6 +8,7 @@
 
 #include "kmeans.hpp"
 #include "fastapprox.hpp"
+#include "pca.hpp"
 
 using namespace std;
 using namespace cv;
@@ -21,88 +22,6 @@ TODO:
  - combine convolutions with coefficients
  - Restructure all the code
 */
-
-// Should be identical to MatLab circshift() function.
-// TODO: test this function
-void circularShift(const Mat &inputMat, Mat &outputMat, const int rowOffset, const int ColOffset)
-{
-    const int rows = inputMat.rows;
-    const int cols = inputMat.cols;
-
-    Mat temp = inputMat.clone();
-
-    // Do shift of rows
-    for (int i = 0; i < rows; i++)
-    {
-        temp.row((i + rowOffset + rows) % rows) = inputMat.row(i);
-    }
-
-    outputMat = temp.clone();
-
-    // Do shift of columns
-    for (int j = 0; j < cols; j++)
-    {
-        outputMat.col((j + ColOffset + cols) % cols) = temp.col(j);
-    }
-}
-
-void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, const int numDims)
-{
-    const int rows = inputMat.rows;
-    const int cols = inputMat.cols;
-    const int channels = inputMat.channels();
-    const int numNeighbors = pow(2 * windowRadius + 1, 2);
-
-    int dims[3] = {rows, cols, numNeighbors};
-
-    Mat spatialKernel(3, dims, inputMat.type());
-
-    int n = 0;
-    Mat C;
-
-    for (int i = -windowRadius; i < windowRadius; i++)
-    {
-        for (int j = -windowRadius; j < windowRadius; j++)
-        {
-            const int dist2 = i * i + j * j;
-            const double weight = exp(-dist2 / 2.0 / (windowRadius / 2.0));
-
-            circularShift(inputMat, C, i, j);
-
-            Range ranges[3] = {
-                Range::all(),
-                Range::all(),
-                Range(n, n + 1)};
-
-            /* Hacky workaround for slicing a 3d matrix by reference:
-             * slice it, convert C to rows x cols x 1 and then add C to
-             * the slice instead of setting it. This keeps the reference.
-             */
-            Mat slice = spatialKernel(ranges);
-
-            int dims3d[] = {rows, cols, 1};
-
-            Mat temp(3, dims3d, C.type());
-            temp.data = C.data;
-
-            slice += temp * weight;
-            n++;
-        }
-    }
-
-    Mat flattened;
-
-    int newShape[2] = {rows * cols, numNeighbors * channels};
-    flattened = spatialKernel.reshape(1, 2, newShape);
-
-    flattened = flattened - cv::mean(flattened);
-
-    cv::PCA pca(flattened, noArray(), cv::PCA::DATA_AS_COL, numDims);
-
-    cv::transpose(pca.eigenvectors, outputMat);
-
-    outputMat = outputMat.reshape(0, {rows, cols, numDims});
-}
 
 double compute_psnr(const Mat &baseImage, const Mat &changedImage)
 {
@@ -132,35 +51,38 @@ double compute_psnr(const Mat &baseImage, const Mat &changedImage)
     return psnr;
 }
 
-void resize3D(const Mat &inputMat, Mat &outputMat, const int rows, const int cols)
+/**
+ * Resize an image of size X x Y x P to rows x cols x P
+ *
+ */
+void resize3D(Mat &inputMat, Mat &outputMat, const int rows, const int cols)
 {
+    const int inputRows = inputMat.size[0];
+    const int inputCols = inputMat.size[1];
     const int zDims = inputMat.size[2];
     const int size[] = {rows, cols, zDims};
     const int type = inputMat.type();
 
     outputMat = Mat::zeros(3, size, type);
 
-    for (int z = 0; z < zDims; z++)
-    {
-        Range ranges[] = {
-            Range::all(),
-            Range::all(),
-            Range(z, z + 1)};
+    const int dims[] = {rows, cols, zDims};
+    outputMat.create(3, dims, type);
 
-        Mat inputSlice3D = inputMat(ranges);
+    for(int z = 0; z < zDims; z++){
+        Mat slice(inputRows, inputCols, type);
+        for(int row = 0; row < inputRows; row++){
+            for(int col = 0; col <inputCols; col++){
+                slice.at<double>(row, col) = inputMat.at<double>(row, col, z);
+            }
+        }
 
-        // Create 2D Mat that can be resized properly.
-        Mat inputSlice2D(inputMat.size[0], inputMat.size[1], type);
-        inputSlice2D.data = inputSlice3D.data;
+        cv::resize(slice, slice, Size(rows, cols));
 
-        Mat outputSlice2D(rows, cols, type);
-        cv::resize(inputSlice2D, outputSlice2D, Size(rows, cols));
-
-        int sliceSize[] = {rows, cols, 1};
-        Mat outputSlice3D(3, sliceSize, type);
-        outputSlice3D.data = outputSlice2D.data;
-
-        outputMat(ranges) += outputSlice3D;
+        for(int row = 0; row < rows; row++){
+            for(int col = 0; col < cols; col++){
+                outputMat.at<double>(row, col, z) = slice.at<double>(row, col);
+            }
+        }
     }
 }
 
@@ -170,8 +92,8 @@ int main()
     cv::setNumThreads(1);
 
     const string filename = "../../images/mandril.tif";
-    const size_t sigma = 100;
-    const int S = 10; // TODO: find out what this is?? Search window?
+    const int sigma = 1; // 100;
+    const int S = 10;    // TODO: find out what this is?? Search window?
     const int windowRadius = 3;
     const int pcaDims = 25;
     const int numClusters = 31;
@@ -197,20 +119,15 @@ int main()
 
     imshow("float image", inputImageFloat);
 
-    Mat normalized = inputImageFloat.clone();
-    normalized = normalized - cv::mean(normalized);
-
-    imshow("Normalized image", normalized);
-
     cout << "Calculating pca...\n";
     Mat pcaResult;
-    computePca(normalized, pcaResult, windowRadius, pcaDims);
+    computePca(inputImageFloat, pcaResult, windowRadius, pcaDims);
 
     // Resize image for Kmeans
     Mat resized;
     resize3D(pcaResult, resized, kMeansImgSize, kMeansImgSize);
 
-    int newShape[] = {kMeansImgSize * kMeansImgSize, pcaDims};
+    const int newShape[] = {kMeansImgSize * kMeansImgSize, pcaDims};
     resized = resized.reshape(0, 2, newShape);
 
     // Compute KMeans clusters
@@ -219,15 +136,17 @@ int main()
     Mat centers;
     kmeansRecursive(resized, centers, numClusters);
 
-
-    //Filtering
+    // Filtering
     Mat denoised;
     fastApprox(inputImageFloat, S, 3.5 * sigma / 256, centers, pcaResult, denoised);
 
     cv::imshow("Denoised", denoised);
 
+    cout << cv::mean(denoised) << '\n';
+
     cout << "Done" << endl;
 
-    waitKey(0);
+    // TODO compute PSNR
 
+    waitKey(0);
 }

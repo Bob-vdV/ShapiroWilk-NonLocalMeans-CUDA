@@ -31,7 +31,7 @@ void box1D(const Mat &inputMat, const int S, Mat &outputMat)
         outputMat.at<double>(i, 0) = outputMat.at<double>(i - 1, 0) - inputMat.at<double>(i - S + 1, 0);
     }
 }
-//TODO: support for 3D images
+
 void box2D(const Mat &inputMat, const int S, Mat &outputMat)
 {
     const int rows = inputMat.rows;
@@ -77,8 +77,12 @@ void boxFilter(const Mat &inputMat, const int S, Mat &outputMat)
 
     cv::split(inputMat, inputChannels);
 
-    for(int chnl = 0;chnl < numChannels; chnl++){
+    for (int chnl = 0; chnl < numChannels; chnl++)
+    {
         box2D(inputChannels[chnl], S, outputChannels[chnl]);
+        //cout << inputChannels[chnl].at<double>(0,0) << '\n';
     }
     cv::merge(outputChannels, numChannels, outputMat);
+
+    //cout << "out " <<  outputMat.at<Vec3d>(0,0) << '\n';
 }
