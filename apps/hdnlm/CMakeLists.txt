@@ -8,6 +8,9 @@ add_executable(hdnlm
 	fastapprox.cpp
 	filter.hpp
 	filter.cpp
+	utils.hpp
+	utils.cpp
+	utils.tpp
 	)
 add_compile_options(-lm)
 

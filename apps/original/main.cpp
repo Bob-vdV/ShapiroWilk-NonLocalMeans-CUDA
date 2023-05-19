@@ -141,7 +141,7 @@ int main(int argc, char* argv[])
 	if(argc == 2){
 		imagePath = argv[1];
 	} else {
-		imagePath = "../images/NCT1.png";
+		imagePath = "../../images/NCT1.png";
 	}
 
 	input_mat = imread(imagePath);

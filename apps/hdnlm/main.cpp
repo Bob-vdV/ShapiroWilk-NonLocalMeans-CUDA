@@ -9,6 +9,7 @@
 #include "kmeans.hpp"
 #include "fastapprox.hpp"
 #include "pca.hpp"
+#include "utils.hpp"
 
 using namespace std;
 using namespace cv;
@@ -23,105 +24,16 @@ TODO:
  - Restructure all the code
 */
 
-double compute_psnr(const Mat &baseImage, const Mat &changedImage)
-{
-    Mat difference = baseImage.clone();
-    cv::absdiff(changedImage, baseImage, difference);
-
-    cv::imshow("Difference", difference);
-
-    double sum = 0;
-
-    for (int row = 0; row < difference.rows; row++)
-    {
-        for (int col = 0; col < difference.cols; col++)
-        {
-            // Repeat for each color channel
-            for (size_t channel = 0; channel < 3; channel++)
-            {
-                const double value = difference.at<cv::Vec3b>(row, col)[channel];
-                sum += value * value;
-            }
-        }
-    }
-    const double mse = sum / difference.rows / difference.cols;
-
-    const double psnr = 20 * log10(255) - 10 * log10(mse);
-
-    return psnr;
-}
-
 /**
- * Resize an image of size X x Y x P to rows x cols x P
- *
- */
-void resize3D(Mat &inputMat, Mat &outputMat, const int rows, const int cols)
-{
-    const int inputRows = inputMat.size[0];
-    const int inputCols = inputMat.size[1];
-    const int zDims = inputMat.size[2];
-    const int size[] = {rows, cols, zDims};
-    const int type = inputMat.type();
-
-    outputMat = Mat::zeros(3, size, type);
-
-    const int dims[] = {rows, cols, zDims};
-    outputMat.create(3, dims, type);
-
-    for(int z = 0; z < zDims; z++){
-        Mat slice(inputRows, inputCols, type);
-        for(int row = 0; row < inputRows; row++){
-            for(int col = 0; col <inputCols; col++){
-                slice.at<double>(row, col) = inputMat.at<double>(row, col, z);
-            }
-        }
-
-        cv::resize(slice, slice, Size(rows, cols));
-
-        for(int row = 0; row < rows; row++){
-            for(int col = 0; col < cols; col++){
-                outputMat.at<double>(row, col, z) = slice.at<double>(row, col);
-            }
-        }
-    }
-}
-
-int main()
-{
-    // Ensure that program runs sequentially
-    cv::setNumThreads(1);
-
-    const string filename = "../../images/mandril.tif";
-    const int sigma = 1; // 100;
-    const int S = 10;    // TODO: find out what this is?? Search window?
-    const int windowRadius = 3;
-    const int pcaDims = 25;
-    const int numClusters = 31;
-
-    const int kMeansImgSize = 256;
-
-    Mat inputImage = imread(filename);
-
-    Mat noise = inputImage.clone();
-    randn(noise, 0, sigma);
-
-    Mat noisyImage = inputImage.clone();
-    cv::add(inputImage, noise, noisyImage);
-
-    cout << "Noisy image PSNR: " << compute_psnr(inputImage, noisyImage) << '\n';
-
-    imshow("original image", inputImage);
-    imshow("noisy image", noisyImage);
-
+ * Input: noisy image of type floating point
+ * Output: denoised floating point image
+ * 
+*/
+void fasthdnlm(const cv::Mat &noisyImage, cv::Mat &outputImage, const double sigma, const int S, const int windowRadius, const int pcaDims, const int numClusters, const int kMeansImgSize){
     // Compute PCA
-    Mat inputImageFloat;
-    noisyImage.convertTo(inputImageFloat, CV_64FC3, 1 / 255.0);
-
-    imshow("float image", inputImageFloat);
-
     cout << "Calculating pca...\n";
     Mat pcaResult;
-    computePca(inputImageFloat, pcaResult, windowRadius, pcaDims);
+    computePca(noisyImage, pcaResult, windowRadius, pcaDims);
 
     // Resize image for Kmeans
     Mat resized;
@@ -137,14 +49,63 @@ int main()
     kmeansRecursive(resized, centers, numClusters);
 
     // Filtering
+    cout << "Applying filters...\n";
+
+    fastApprox(noisyImage, S, 3.5 * sigma, centers, pcaResult, outputImage);
+
+    cout << cv::mean(outputImage) << '\n';
+
+    cout << "Done\n";
+}
+
+
+
+int main()
+{
+    // Ensure that program runs sequentially
+    cv::setNumThreads(1);
+
+    const string filename = "../../images/mandril.tif";
+    const double sigma = 0.08; 
+    const int S = 10;    // TODO: find out what this is?? Search window?
+    const int windowRadius = 3;
+    const int pcaDims = 25;
+    const int numClusters = 31;
+
+    const int kMeansImgSize = 256;
+
+    Mat inputImage = imread(filename);
+
+    Mat floatImage;
+    inputImage.convertTo(floatImage, CV_64FC3, 1 / 255.0);
+
+    cout << cv::mean(floatImage) << '\n';
+
+    Mat noise = floatImage.clone();
+    randn(noise, 0, sigma);
+
+    Mat noisyImage = floatImage.clone();
+    cv::add(floatImage, noise, noisyImage);
+
+    cout << "Noisy image PSNR: " << compute_psnr(floatImage, noisyImage) << '\n';
+
+    imshow("original image", inputImage);
+    imshow("noisy image", noisyImage);
+
+    const chrono::system_clock::time_point start = chrono::high_resolution_clock::now();
+
     Mat denoised;
-    fastApprox(inputImageFloat, S, 3.5 * sigma / 256, centers, pcaResult, denoised);
+    fasthdnlm(noisyImage, denoised, sigma, S, windowRadius, pcaDims, numClusters, kMeansImgSize);
+
+    const chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
+    const std::chrono::duration<double> elapsed_seconds = end-start;
+
+    cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
+
+    denoised.convertTo(denoised, inputImage.type(), 255.0);
+
 
     cv::imshow("Denoised", denoised);
-
-    cout << cv::mean(denoised) << '\n';
-
-    cout << "Done" << endl;
 
     // TODO compute PSNR
 

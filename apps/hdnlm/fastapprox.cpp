@@ -1,7 +1,11 @@
 #include "fastapprox.hpp"
 #include "filter.hpp"
+#include "utils.hpp"
 
 #include "opencv2/imgproc.hpp"
+
+// TODO REMOVE
+#include <opencv2/highgui.hpp>
 #include <iostream>
 
 using namespace std;
@@ -13,14 +17,15 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
     const int rows = inputImage.rows;
     const int cols = inputImage.cols;
-    const int type = inputImage.type();
+    const int inputType = inputImage.type(); // Multiple channels
+    const int guideType = guideImage.type(); // 1 channel
 
-    Mat B = Mat::zeros(rows, cols, type);
+    Mat B = Mat::zeros(rows, cols, inputType);
 
     const int clusters = center.rows;
 
     // Forming intermediate images and coefficients
-    Mat C1 = Mat::zeros(clusters, clusters, CV_64FC1);
+    Mat C1 = Mat::zeros(clusters, clusters, guideType);
 
     for (int i = 0; i < clusters; i++)
     {
@@ -37,14 +42,11 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
     Mat C1chan = C1.inv(cv::DECOMP_SVD);
 
-    // TODO: Probably very slow, needs to be improved.
     int dims[] = {rows, cols, clusters};
-    Mat W = Mat::zeros(3, dims, type);
+    Mat W = Mat::zeros(3, dims, CV_64FC1);
 
     for (int i = 0; i < clusters; i++)
     {
-        Mat resized = center.row(i).reshape(0, {guidedDims, 1});
-
         for (int row = 0; row < rows; row++)
         {
             for (int col = 0; col < cols; col++)
@@ -53,23 +55,22 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
                 for (int j = 0; j < clusters; j++)
                 {
-                    const double temp = guideImage.at<double>(row, col, j) - resized.at<double>(j, 0);
+                    const double temp = guideImage.at<double>(row, col, j) - center.at<double>(i, j);
                     sum += temp * temp;
                 }
-                W.at<double>(row, col, i) = sum;
+                W.at<double>(row, col, i) = exp(-sum / (2 * h * h));
             }
         }
     }
 
-    W = -W / (2 * h * h);
+    cout << "W: " << cv::mean(W) << '\n';
 
-    cv::exp(W, W);
-    Mat Wb = Mat::zeros(rows, cols, type);
+    Mat Wb = Mat::zeros(rows, cols, guideType);
 
     // Box filtering using O(1) convolutions
     for (int i = 0; i < clusters; i++)
     {
-        Mat Wt(rows, cols, type);
+        Mat Wt(rows, cols, guideType);
         for (int row = 0; row < rows; row++)
         {
             for (int col = 0; col < cols; col++)
@@ -83,15 +84,17 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
             }
         }
 
-        Range ranges[] = {Range::all(), Range::all(), Range(i, i + 1)};
-        Mat WSlice = W(ranges);
+        Mat WSlice;
+        mat3toMat2<double>(W, WSlice, 2, i);
 
-        WSlice.copySize(Mat(rows, cols, type));
+        cout << "Slice " << cv::mean(WSlice) << '\n';
 
         Mat box;
         boxFilter(WSlice, S, box);
 
         Wb += Wt.mul(box);
+
+        cout << "Wb " << cv::mean(Wb) << '\n';
 
         Mat multiplied = inputImage.clone();
 
@@ -99,18 +102,40 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
         {
             for (int col = 0; col < cols; col++)
             {
-                multiplied.at<cv::Vec3d>(row, col) *= W.at<double>(row, col, i);
+                multiplied.at<Vec3d>(row, col) *= W.at<double>(row, col, i);
             }
         }
 
         Mat BBox;
         boxFilter(multiplied, S, BBox);
 
-        B += Wt.mul(BBox);
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < cols; col++)
+            {
+                B.at<Vec3d>(row, col) += Wt.at<Vec3d>(row, col) * BBox.at<double>(row, col);
+            }
+        }
     }
-    cv::divide(B, Wb, outputImage);
 
-    //cout << cv::mean(B) << '\t' << cv::mean(Wb) << '\n';
-    //cout << outputImage.at<Vec3d>(0,0) << '\n';
-    //cout << cv::mean(outputImage) << '\n';
+    imshow("B", B);
+    imshow("Wb", Wb);
+
+    outputImage.create(rows, cols, inputType);
+
+    for (int row = 0; row < rows; row++)
+    {
+        for (int col = 0; col < cols; col++)
+        {
+            outputImage.at<Vec3d>(row, col) = B.at<Vec3d>(row, col) / Wb.at<double>(row, col);
+
+            /*if(Wb.at<double>(row, col) == 0.0){
+                cout << "0 at " << row << ", " << col << '\n';
+            }*/
+        }
+    }
+
+    cout << cv::mean(B) << '\t' << cv::mean(Wb) << '\n';
+    // cout << outputImage.at<Vec3d>(0,0) << '\n';
+    // cout << cv::mean(outputImage) << '\n';
 }

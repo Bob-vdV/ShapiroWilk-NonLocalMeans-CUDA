@@ -1,4 +1,5 @@
 #include "pca.hpp"
+#include "utils.hpp"
 
 // TODO remove
 #include <iostream>
@@ -56,23 +57,10 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
 
             circularShift(normalized, C, i, j);
 
-            Range ranges[3] = {
-                Range::all(),
-                Range::all(),
-                Range(n, n + 1)};
+            Mat slice = C * weight;
 
-            /* Hacky workaround for slicing a 3d matrix by reference:
-             * slice it, convert C to rows x cols x 1 and then add C to
-             * the slice instead of setting it. This keeps the reference.
-             */
-            Mat slice = spatialKernel(ranges);
+            mat2toMat3<cv::Vec3d>(slice, spatialKernel, 2, n);
 
-            int dims3d[] = {rows, cols, 1};
-
-            Mat temp(3, dims3d, C.type());
-            temp.data = C.data;
-
-            slice += temp * weight;
             n++;
         }
     }
@@ -82,7 +70,12 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
     int newShape[2] = {rows * cols, numNeighbors * channels};
     flattened = spatialKernel.reshape(1, 2, newShape);
 
-    flattened -= cv::mean(flattened);
+    Mat means;
+    cv::reduce(flattened, means, 0, REDUCE_AVG);
+
+    for(int row = 0; row < flattened.rows; row++){
+        flattened.row(row) -= means;
+    }
 
     Mat eigenvalues, eigenVectors;
     cv::eigen(flattened.t() * flattened, eigenvalues, eigenVectors);

@@ -37,8 +37,8 @@ void minPerColumn(const Mat &inputMat, Mat &mins, Mat &minIndices)
 /**
  * Slice a matrix where the bools Mat is nonzero.
  * Output has all rows from inputMat where respective bool value is true.
- * 
-*/
+ *
+ */
 void sliceMat(const Mat &inputMat, const Mat &bools, Mat &slice)
 {
     const int inputRows = inputMat.rows;
@@ -55,7 +55,7 @@ void sliceMat(const Mat &inputMat, const Mat &bools, Mat &slice)
 }
 /**
  * Index of the maximum in the given Mat
-*/
+ */
 int maxIdx(const Mat &inputMat)
 {
     int maxIdx = 0;
@@ -88,16 +88,12 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
     Mat squared;
     cv::multiply(inputMat, inputMat, squared);
 
-
     Mat Y;
-
     cv::reduce(squared, Y, 1, cv::REDUCE_SUM);
 
-    cout << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
-
+    //cout << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
 
     int minIdx, maxIdx;
-
     cv::minMaxIdx(Y, NULL, NULL, &minIdx, &maxIdx);
 
     inputMat.row(minIdx).copyTo(C.row(0));
@@ -143,7 +139,7 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
                 double sum = 0;
                 for (int row = 0; row < rows; row++)
                 {
-                    if ((int)gIdx.at<double>(row, 0) == t)
+                    if (gIdx.at<double>(row, 0) == t)
                     {
                         sum += inputMat.at<double>(row, col);
                     }
@@ -197,7 +193,7 @@ void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
     int maxIndex = maxIdx(var);
     while (K < clusters)
     {
-  Mat label;
+        Mat label;
         Mat slice;
         sliceMat(inputMat, minCenter == maxIndex, slice);
         kmeansCluster(slice, label, centerTemp, newDist, newClust);
@@ -246,6 +242,4 @@ void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
         }
         maxIndex = maxIdx(var);
     }
-
-    // TODO
 }

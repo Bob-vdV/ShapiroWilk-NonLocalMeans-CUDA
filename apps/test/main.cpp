@@ -190,7 +190,7 @@ void test(string imagePath)
     {
         cout << "Finished.";
         imshow("Output", output_mat);
-        waitKey(0);
+        //waitKey(0);
     }
 }
 
@@ -198,11 +198,14 @@ void test(string imagePath)
 int main()
 {
     vector<string> images = {
+        "../../images/256x256.png"
+
+        /*
         "../../images/64x64.png",
         "../../images/128x128.png",
         "../../images/256x256.png",
         "../../images/512x512.png",
-        "../../images/1024x1024.png",
+        "../../images/1024x1024.png",*/
     };
 
     for (auto image : images)
