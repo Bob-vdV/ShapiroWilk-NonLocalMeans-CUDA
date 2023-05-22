@@ -1,9 +1,6 @@
 #include "pca.hpp"
 #include "utils.hpp"
 
-// TODO remove
-#include <iostream>
-
 using namespace std;
 using namespace cv;
 
@@ -48,9 +45,9 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
 
     Mat normalized = inputMat - cv::mean(inputMat);
 
-    for (int i = -windowRadius; i < windowRadius; i++)
+    for (int i = -windowRadius; i <= windowRadius; i++)
     {
-        for (int j = -windowRadius; j < windowRadius; j++)
+        for (int j = -windowRadius; j <= windowRadius; j++)
         {
             const int dist2 = i * i + j * j;
             const double weight = exp(-dist2 / 2.0 / (windowRadius / 2.0));
@@ -65,15 +62,14 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
         }
     }
 
-    Mat flattened;
-
     int newShape[2] = {rows * cols, numNeighbors * channels};
-    flattened = spatialKernel.reshape(1, 2, newShape);
+    Mat flattened = spatialKernel.reshape(1, 2, newShape);
 
     Mat means;
     cv::reduce(flattened, means, 0, REDUCE_AVG);
 
-    for(int row = 0; row < flattened.rows; row++){
+    for (int row = 0; row < flattened.rows; row++)
+    {
         flattened.row(row) -= means;
     }
 

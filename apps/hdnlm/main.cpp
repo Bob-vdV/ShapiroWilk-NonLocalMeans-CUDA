@@ -27,9 +27,10 @@ TODO:
 /**
  * Input: noisy image of type floating point
  * Output: denoised floating point image
- * 
-*/
-void fasthdnlm(const cv::Mat &noisyImage, cv::Mat &outputImage, const double sigma, const int S, const int windowRadius, const int pcaDims, const int numClusters, const int kMeansImgSize){
+ *
+ */
+void fasthdnlm(const cv::Mat &noisyImage, cv::Mat &outputImage, const double sigma, const int S, const int windowRadius, const int pcaDims, const int numClusters, const int kMeansImgSize)
+{
     // Compute PCA
     cout << "Calculating pca...\n";
     Mat pcaResult;
@@ -58,16 +59,14 @@ void fasthdnlm(const cv::Mat &noisyImage, cv::Mat &outputImage, const double sig
     cout << "Done\n";
 }
 
-
-
 int main()
 {
     // Ensure that program runs sequentially
     cv::setNumThreads(1);
 
     const string filename = "../../images/mandril.tif";
-    const double sigma = 0.08; 
-    const int S = 10;    // TODO: find out what this is?? Search window?
+    const double sigma = 0.08;
+    const int S = 10; // TODO: find out what this is?? Search window?
     const int windowRadius = 3;
     const int pcaDims = 25;
     const int numClusters = 31;
@@ -78,8 +77,6 @@ int main()
 
     Mat floatImage;
     inputImage.convertTo(floatImage, CV_64FC3, 1 / 255.0);
-
-    cout << cv::mean(floatImage) << '\n';
 
     Mat noise = floatImage.clone();
     randn(noise, 0, sigma);
@@ -98,12 +95,11 @@ int main()
     fasthdnlm(noisyImage, denoised, sigma, S, windowRadius, pcaDims, numClusters, kMeansImgSize);
 
     const chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
-    const std::chrono::duration<double> elapsed_seconds = end-start;
+    const std::chrono::duration<double> elapsed_seconds = end - start;
 
     cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
 
     denoised.convertTo(denoised, inputImage.type(), 255.0);
-
 
     cv::imshow("Denoised", denoised);
 

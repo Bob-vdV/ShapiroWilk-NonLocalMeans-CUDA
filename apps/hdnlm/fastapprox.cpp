@@ -29,18 +29,30 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
     for (int i = 0; i < clusters; i++)
     {
-        C1.at<double>(i, i) = 1; // TODO: CHECK IF THIS is correct
+        C1.at<double>(i, i) = 1;
 
-        for (int j = i; j < clusters; j++)
+        for (int j = i+1; j < clusters; j++)
         {
             Mat diff = center.row(i) - center.row(j);
             diff = diff.mul(diff); // element wise square
-            C1.at<double>(i, j) = -cv::sum(diff)[0] / (2 * h * h);
+            C1.at<double>(i, j) = exp(-cv::sum(diff)[0] / (2 * h * h));
             C1.at<double>(j, i) = C1.at<double>(i, j);
         }
     }
 
-    Mat C1chan = C1.inv(cv::DECOMP_SVD);
+    const Mat C1chan = C1.inv(cv::DECOMP_SVD);
+
+    cout << center.size << '\n';
+    cout << guideImage.size << '\n';
+    cout << "C1: " << cv::mean(C1)[0] << '\n';
+
+    double min = 0, max = 0;
+    int minIdx = 0, maxIdx =0;
+    cv::minMaxIdx(C1, &min, &max, &minIdx, &maxIdx);
+    cout << min << '\t' << max << '\t' << minIdx << '\t' << maxIdx << '\n';
+
+    cout << "C1Chan: " << cv::mean(C1chan) << '\n';
+
 
     int dims[] = {rows, cols, clusters};
     Mat W = Mat::zeros(3, dims, CV_64FC1);
@@ -53,9 +65,9 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
             {
                 double sum = 0;
 
-                for (int j = 0; j < clusters; j++)
+                for (int gd = 0; gd < guidedDims; gd++)
                 {
-                    const double temp = guideImage.at<double>(row, col, j) - center.at<double>(i, j);
+                    const double temp = guideImage.at<double>(row, col, gd) - center.at<double>(i, gd);
                     sum += temp * temp;
                 }
                 W.at<double>(row, col, i) = exp(-sum / (2 * h * h));
@@ -64,6 +76,8 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
     }
 
     cout << "W: " << cv::mean(W) << '\n';
+    minMaxIdx(W, &min, &max, &minIdx, &maxIdx);
+    cout << min << '\t' << max << '\t' << minIdx << '\t' << maxIdx << '\n';
 
     Mat Wb = Mat::zeros(rows, cols, guideType);
 
@@ -84,10 +98,12 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
             }
         }
 
+        cout << "Wt " << cv::mean(Wt) << '\n';
+
         Mat WSlice;
         mat3toMat2<double>(W, WSlice, 2, i);
 
-        cout << "Slice " << cv::mean(WSlice) << '\n';
+        cout << "Slice " << cv::mean(WSlice)[0] << '\n';
 
         Mat box;
         boxFilter(WSlice, S, box);
@@ -135,7 +151,7 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
         }
     }
 
-    cout << cv::mean(B) << '\t' << cv::mean(Wb) << '\n';
+    cout << cv::mean(B) << '\t' << cv::mean(Wb)[0] << '\n';
     // cout << outputImage.at<Vec3d>(0,0) << '\n';
     // cout << cv::mean(outputImage) << '\n';
 }

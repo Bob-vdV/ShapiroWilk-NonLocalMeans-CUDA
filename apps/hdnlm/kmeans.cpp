@@ -11,9 +11,11 @@ using namespace cv;
  */
 void minPerColumn(const Mat &inputMat, Mat &mins, Mat &minIndices)
 {
+    assert(inputMat.type() == CV_64FC1); 
+    assert(inputMat.cols == 2);
+
     const int rows = inputMat.rows;
     const int type = inputMat.type();
-    assert(inputMat.cols == 2);
 
     mins = Mat(rows, 1, type);
     for (int r = 0; r < rows; r++)
@@ -58,6 +60,27 @@ void sliceMat(const Mat &inputMat, const Mat &bools, Mat &slice)
  */
 int maxIdx(const Mat &inputMat)
 {
+    assert(inputMat.type() == 6);
+
+    auto it = inputMat.begin<double>();
+    auto end = inputMat.end<double>();
+
+    double max = it[0];
+
+    cv::Point idx = it.pos();
+    ++it;
+
+    for(;it!=end;++it){
+        if(it[0] > max){
+            max = it[0];
+            idx = it.pos();
+        }
+    }
+
+    cout << idx << '\t' << idx.y << '\n';
+    return idx.y;
+
+    /*
     int maxIdx = 0;
     double max = inputMat.at<double>(0, 0);
 
@@ -70,7 +93,8 @@ int maxIdx(const Mat &inputMat)
             maxIdx = i;
         }
     }
-    return maxIdx;
+    */
+    //return maxIdx;
 }
 
 /**
@@ -93,8 +117,9 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
 
     //cout << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
 
-    int minIdx, maxIdx;
-    cv::minMaxIdx(Y, NULL, NULL, &minIdx, &maxIdx);
+    double unusedMin, unusedMax = 0;
+    int minIdx = 0, maxIdx = 0;
+    cv::minMaxIdx(Y, &unusedMin, &unusedMax, &minIdx, &maxIdx);
 
     inputMat.row(minIdx).copyTo(C.row(0));
     inputMat.row(maxIdx).copyTo(C.row(1));
@@ -130,7 +155,8 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
         // Partition data to closest centroids
         minPerColumn(D, mins, gIdx);
 
-        clust = Mat(2, 1, CV_32SC1);
+        const int clustDims[] = {2, 1};
+        clust.create(2, clustDims, type);
 
         for (int t = 0; t < 2; t++)
         {
@@ -197,6 +223,8 @@ void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
         Mat slice;
         sliceMat(inputMat, minCenter == maxIndex, slice);
         kmeansCluster(slice, label, centerTemp, newDist, newClust);
+
+        //TODO: newClust has uninitialized values??
 
         if (newClust.at<double>(0, 0) == 0 || newClust.at<double>(1, 0) == 0)
         {
