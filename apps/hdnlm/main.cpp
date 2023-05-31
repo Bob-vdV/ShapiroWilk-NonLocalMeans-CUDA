@@ -65,11 +65,13 @@ int main()
     cv::setNumThreads(1);
 
     const string filename = "../../images/mandril.tif";
-    const double sigma = 0.08;
-    const int S = 10; // TODO: find out what this is?? Search window?
+    const double sigma = 0.08;//0.08;
+    const int S = 10; 
     const int windowRadius = 3;
     const int pcaDims = 25;
     const int numClusters = 31;
+
+    const double sigmaMultiplier = 3.5;
 
     const int kMeansImgSize = 256;
 
@@ -92,18 +94,19 @@ int main()
     const chrono::system_clock::time_point start = chrono::high_resolution_clock::now();
 
     Mat denoised;
-    fasthdnlm(noisyImage, denoised, sigma, S, windowRadius, pcaDims, numClusters, kMeansImgSize);
+    fasthdnlm(noisyImage, denoised, sigma * sigmaMultiplier, S, windowRadius, pcaDims, numClusters, kMeansImgSize);
 
     const chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
     const std::chrono::duration<double> elapsed_seconds = end - start;
 
     cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
 
+    const double denoisedPSNR = compute_psnr(floatImage, denoised);
+    cout << "Denoised image PSNR: " << denoisedPSNR << '\n';
+
     denoised.convertTo(denoised, inputImage.type(), 255.0);
 
     cv::imshow("Denoised", denoised);
-
-    // TODO compute PSNR
 
     waitKey(0);
 }

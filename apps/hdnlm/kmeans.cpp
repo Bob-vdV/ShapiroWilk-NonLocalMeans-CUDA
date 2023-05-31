@@ -79,22 +79,6 @@ int maxIdx(const Mat &inputMat)
 
     cout << idx << '\t' << idx.y << '\n';
     return idx.y;
-
-    /*
-    int maxIdx = 0;
-    double max = inputMat.at<double>(0, 0);
-
-    for (int i = 1; i < inputMat.rows; i++)
-    {
-        double val = inputMat.at<double>(i, 0);
-        if (max < val)
-        {
-            val = max;
-            maxIdx = i;
-        }
-    }
-    */
-    //return maxIdx;
 }
 
 /**
@@ -109,13 +93,24 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
 
     C = Mat::zeros(2, cols, type);
 
-    Mat squared;
-    cv::multiply(inputMat, inputMat, squared);
+    Mat squared = inputMat.mul(inputMat);
 
     Mat Y;
     cv::reduce(squared, Y, 1, cv::REDUCE_SUM);
 
-    //cout << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
+
+    //TODO remove block
+    double min = INFINITY, max = -INFINITY;
+    for(auto it = inputMat.begin<double>(); it != inputMat.end<double>(); ++it){
+        min = cv::min(min, it[0]);
+        max = cv::max(max, it[0]);
+    }
+
+    cout << "Cluster: " << cv::mean(inputMat)[0] << '\t' << cv::mean(squared)[0] << '\t' << cv::mean(Y)[0] << '\n';
+    cout << "min, max: " << min << '\t' << max << '\n';
+
+    //------
+
 
     double unusedMin, unusedMax = 0;
     int minIdx = 0, maxIdx = 0;
@@ -176,8 +171,8 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
         }
 
         // Count number of points in each cluster
-        clust.at<int>(0, 0) = rows - cv::sum(gIdx)[0];
-        clust.at<int>(1, 0) = cv::sum(gIdx)[0];
+        clust.at<double>(0, 0) = rows - cv::sum(gIdx)[0];
+        clust.at<double>(1, 0) = cv::sum(gIdx)[0];
     }
     dist = Mat(2, 1, type);
 
@@ -196,7 +191,7 @@ void kmeansCluster(const Mat &inputMat, Mat &gIdx, Mat &C, Mat &dist, Mat &clust
     }
 }
 
-void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
+void kmeansRecursive(const Mat &inputMat, Mat &center, const int clusters)
 {
     const int dims = inputMat.cols;
     const int type = inputMat.type();
@@ -209,6 +204,21 @@ void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
     center = Mat::zeros(clusters, dims, type);
     Mat var = Mat::zeros(clusters, 1, type);
     K++;
+
+
+    //TODO remove block
+    cout << "CenterTemp: " << cv::mean(centerTemp) << '\n';
+    double min = INFINITY, max = -INFINITY;
+
+    for(auto it = centerTemp.begin<double>(); it != centerTemp.end<double>(); ++it){
+        min = cv::min(it[0], min);
+        max = cv::max(it[0], max);
+    }
+
+    cout << min << '\t' << max << '\n';
+
+
+//------
 
     centerTemp.row(0).copyTo(center.row(0));
     centerTemp.row(1).copyTo(center.row(1));
@@ -223,8 +233,6 @@ void kmeansRecursive(const Mat &inputMat, Mat &center, int clusters)
         Mat slice;
         sliceMat(inputMat, minCenter == maxIndex, slice);
         kmeansCluster(slice, label, centerTemp, newDist, newClust);
-
-        //TODO: newClust has uninitialized values??
 
         if (newClust.at<double>(0, 0) == 0 || newClust.at<double>(1, 0) == 0)
         {

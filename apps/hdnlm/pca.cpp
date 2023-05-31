@@ -4,7 +4,11 @@
 using namespace std;
 using namespace cv;
 
+// TODO remove
+#include <iostream>
+
 // Should be identical to MatLab circshift() function.
+// TODO do in one shot
 void circularShift(const Mat &inputMat, Mat &outputMat, const int rowOffset, const int ColOffset)
 {
     const int rows = inputMat.rows;
@@ -62,6 +66,22 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
         }
     }
 
+    // TODO: remove block
+    {
+        double min = INFINITY, max = -INFINITY;
+        for (auto it = spatialKernel.begin<Vec3d>(); it != spatialKernel.end<Vec3d>(); ++it)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                min = cv::min(min, it[0][i]);
+                max = cv::max(max, it[0][i]);
+            }
+        }
+
+        cout << "SpatialKernel: " << cv::mean(spatialKernel) << '\t' << min << '\t' << max << '\n';
+    }
+    //------
+
     int newShape[2] = {rows * cols, numNeighbors * channels};
     Mat flattened = spatialKernel.reshape(1, 2, newShape);
 
@@ -73,11 +93,81 @@ void computePca(const Mat &inputMat, Mat &outputMat, const int windowRadius, con
         flattened.row(row) -= means;
     }
 
+    // TODO: remove block
+    {
+        double min, max;
+        min = INFINITY;
+        max = -INFINITY;
+        for (auto it = flattened.begin<double>(); it != flattened.end<double>(); ++it)
+        {
+            min = cv::min(min, it[0]);
+            max = cv::max(max, it[0]);
+        }
+
+        cout << "flattened: " << cv::mean(flattened) << '\t' << min << '\t' << max << '\n';
+    }
+
+    //------
+
     Mat eigenvalues, eigenVectors;
     cv::eigen(flattened.t() * flattened, eigenvalues, eigenVectors);
 
     const Range eigenRange[] = {Range::all(), Range(0, numDims)};
 
-    flattened = flattened * eigenVectors(eigenRange);
+    eigenVectors = eigenVectors(eigenRange);
+
+    flattened = flattened * eigenVectors;
+
+        // TODO: remove block
+    {
+        double min, max;
+        min = INFINITY;
+        max = -INFINITY;
+        for (auto it = flattened.begin<double>(); it != flattened.end<double>(); ++it)
+        {
+            min = cv::min(min, it[0]);
+            max = cv::max(max, it[0]);
+        }
+
+        cout << "flattened after matmul: " << cv::mean(flattened) << '\t' << min << '\t' << max << '\n';
+    }
+
+    //------
+
+
+
+
     outputMat = flattened.reshape(0, {rows, cols, numDims});
+
+    // TODO: remove block
+    double min, max;
+    min = INFINITY;
+    max = -INFINITY;
+    for (auto it = outputMat.begin<double>(); it != outputMat.end<double>(); ++it)
+    {
+        min = cv::min(min, it[0]);
+        max = cv::max(max, it[0]);
+    }
+
+    cout << "PCA output: " << cv::mean(outputMat) << '\t' << min << '\t' << max << '\n';
+
+    Mat test = eigenVectors(eigenRange);
+
+    min = INFINITY;
+    max = -INFINITY;
+    for (auto it = test.begin<double>(); it != test.end<double>(); ++it)
+    {
+        min = cv::min(min, it[0]);
+        max = cv::max(max, it[0]);
+    }
+
+    cout << "Eigenvectors: " << cv::mean(outputMat) << '\t' << min << '\t' << max << '\n';
+
+    cout << eigenVectors << '\n';
+
+    cout << eigenVectors.at<double>(0, 0) << '\n';
+    cout << eigenVectors.at<double>(1, 0) << '\n';
+
+
+    //--
 }

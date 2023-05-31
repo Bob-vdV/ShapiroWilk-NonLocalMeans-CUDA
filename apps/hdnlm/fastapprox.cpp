@@ -19,10 +19,12 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
     const int cols = inputImage.cols;
     const int inputType = inputImage.type(); // Multiple channels
     const int guideType = guideImage.type(); // 1 channel
+    const int clusters = center.rows;
+
+    assert(inputType == CV_64FC3);
+    assert(guideType == CV_64FC1);
 
     Mat B = Mat::zeros(rows, cols, inputType);
-
-    const int clusters = center.rows;
 
     // Forming intermediate images and coefficients
     Mat C1 = Mat::zeros(clusters, clusters, guideType);
@@ -53,9 +55,13 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
     cout << "C1Chan: " << cv::mean(C1chan) << '\n';
 
+    cout << "Center: " << cv::mean(center) << '\n';
+    cv::minMaxIdx(center, &min, &max, &minIdx, &maxIdx);
+    cout << min << '\t' << max << '\t' << minIdx << '\t' << maxIdx << '\n';
+
 
     int dims[] = {rows, cols, clusters};
-    Mat W = Mat::zeros(3, dims, CV_64FC1);
+    Mat W = Mat::zeros(3, dims, guideType);
 
     for (int i = 0; i < clusters; i++)
     {
@@ -110,7 +116,8 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
         Wb += Wt.mul(box);
 
-        cout << "Wb " << cv::mean(Wb) << '\n';
+        //cout << "Box " << cv::mean(box)[0] << '\n';
+        //cout << "Wb " << cv::mean(Wb)[0] << '\n';
 
         Mat multiplied = inputImage.clone();
 
@@ -124,12 +131,14 @@ void fastApprox(const Mat &inputImage, const int S, const double h, Mat &center,
 
         Mat BBox;
         boxFilter(multiplied, S, BBox);
+        //cout << "BBox " << cv::mean(BBox) << '\n';
+
 
         for (int row = 0; row < rows; row++)
         {
             for (int col = 0; col < cols; col++)
             {
-                B.at<Vec3d>(row, col) += Wt.at<Vec3d>(row, col) * BBox.at<double>(row, col);
+                B.at<Vec3d>(row, col) += Wt.at<double>(row, col) * BBox.at<Vec3d>(row, col);
             }
         }
     }

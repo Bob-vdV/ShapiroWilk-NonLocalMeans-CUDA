@@ -1,5 +1,6 @@
 #include "filter.hpp"
 
+//TODO REMOVE
 #include <iostream>
 
 using namespace std;
@@ -7,10 +8,13 @@ using namespace cv;
 
 void box1D(const Mat &inputMat, const int S, Mat &outputMat)
 {
-    assert(inputMat.channels() == 1);
-
     const int rows = inputMat.rows;
+    const int cols = inputMat.cols;
     const int type = inputMat.type();
+
+    assert(type == CV_64FC1);
+    assert(rows > 0 && rows > S);
+    assert(cols == 1);
 
     outputMat.create(rows, 1, type);
 
@@ -19,17 +23,16 @@ void box1D(const Mat &inputMat, const int S, Mat &outputMat)
         Range::all()};
 
     outputMat.at<double>(0, 0) = cv::sum(inputMat(ranges))[0];
-    // cout << outputMat.at<double>(0,0) << '\n';
 
     for (int i = 1; i < S + 1; i++)
     {
         outputMat.at<double>(i, 0) = outputMat.at<double>(i - 1, 0) + inputMat.at<double>(i + S, 0);
     }
-    for (int i = S + 2; i < rows - S; i++)
+    for (int i = S + 1; i < rows - S; i++)
     {
         outputMat.at<double>(i, 0) = outputMat.at<double>(i - 1, 0) + inputMat.at<double>(i + S, 0) - inputMat.at<double>(i - (S + 1), 0);
     }
-    for (int i = rows - S + 1; i < rows; i++)
+    for (int i = rows - S; i < rows; i++)
     {
         outputMat.at<double>(i, 0) = outputMat.at<double>(i - 1, 0) - inputMat.at<double>(i - S + 1, 0);
     }
@@ -37,7 +40,7 @@ void box1D(const Mat &inputMat, const int S, Mat &outputMat)
 
 void box2D(const Mat &inputMat, const int S, Mat &outputMat)
 {
-    assert(inputMat.channels() == 1);
+    assert(inputMat.type() == CV_64FC1);
 
     const int rows = inputMat.rows;
     const int cols = inputMat.cols;
