@@ -3,7 +3,7 @@
 
 #include <opencv2/core.hpp>
 
-double compute_psnr(const cv::Mat &baseImage, const cv::Mat &changedImage);
+double computePSNR(const cv::Mat &baseImage, const cv::Mat &changedImage);
 
 void resize3D(cv::Mat &inputMat, cv::Mat &outputMat, const int rows, const int cols);
 

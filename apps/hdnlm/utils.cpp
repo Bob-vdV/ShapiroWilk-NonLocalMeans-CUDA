@@ -6,7 +6,7 @@
 
 using namespace cv;
 
-double compute_psnr(const Mat &baseImage, const Mat &changedImage)
+double computePSNR(const Mat &baseImage, const Mat &changedImage)
 {
     const int numChannels = baseImage.channels();
 

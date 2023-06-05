@@ -86,7 +86,7 @@ int main()
     Mat noisyImage = floatImage.clone();
     cv::add(floatImage, noise, noisyImage);
 
-    cout << "Noisy image PSNR: " << compute_psnr(floatImage, noisyImage) << '\n';
+    cout << "Noisy image PSNR: " << computePSNR(floatImage, noisyImage) << '\n';
 
     imshow("original image", inputImage);
     imshow("noisy image", noisyImage);
@@ -101,7 +101,7 @@ int main()
 
     cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
 
-    const double denoisedPSNR = compute_psnr(floatImage, denoised);
+    const double denoisedPSNR = computePSNR(floatImage, denoised);
     cout << "Denoised image PSNR: " << denoisedPSNR << '\n';
 
     denoised.convertTo(denoised, inputImage.type(), 255.0);

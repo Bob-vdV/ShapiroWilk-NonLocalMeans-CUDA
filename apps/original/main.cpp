@@ -10,8 +10,8 @@
 using namespace cv;
 using namespace std;
 
-const int N = 256; //512;
-const int M = 256; //512;
+const int N = 256; // 512;
+const int M = 256; // 512;
 float input[N][M], output[N][M];
 int i, j, k1, l1, l2, k2, l3, k3, p, q;
 const int R = 5;
@@ -90,7 +90,7 @@ void mk_gsn_krnl()
 			sm += nlm_kernel[x][y];
 		}
 	}
-	//printf("\n\n\n");
+	// printf("\n\n\n");
 	for (int x = 0; x < R; x++)
 		for (int y = 0; y < S; y++)
 			nlm_kernel[x][y] = nlm_kernel[x][y] / f;
@@ -99,9 +99,9 @@ void mk_gsn_krnl()
 		for (int y = 0; y < S; y++)
 		{
 			nlm_kernel[x][y] = (nlm_kernel[x][y] / sm); // normalization
-			//printf("%f  ", nlm_kernel[x][y]);
+														// printf("%f  ", nlm_kernel[x][y]);
 		}
-		//printf("\n");
+		// printf("\n");
 	}
 }
 
@@ -128,7 +128,7 @@ void CopyArrayToMat(Mat &mt)
 }
 
 //----------------------------------------------------------------------------------------
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	Mat input_mat, gray_mat, output_mat;
 
@@ -138,14 +138,16 @@ int main(int argc, char* argv[])
 	// input_mat = imread("E:/Papers_98/Moradifar__Maryam/images_speckle_1/NCT1.png");
 	string imagePath;
 
-	if(argc == 2){
+	if (argc == 2)
+	{
 		imagePath = argv[1];
-	} else {
+	}
+	else
+	{
 		imagePath = "../../images/NCT1.png";
 	}
 
 	input_mat = imread(imagePath);
-
 
 	if (input_mat.empty())
 		std::cout << "failed to open " << imagePath << std::endl;
@@ -166,9 +168,8 @@ int main(int argc, char* argv[])
 	nlm();
 
 	chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
-	double duration = chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
+	double duration = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 	cout << duration / 1000 << '\n';
-
 
 	// show output image
 	// Copy output array to image Mat (output_mat)

@@ -2,4 +2,6 @@ add_executable(test
 	main.cpp
 )
 
-target_link_libraries( test ${OpenCV_LIBS} )
+target_link_libraries( test 
+	${OpenCV_LIBS}
+)
