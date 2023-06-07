@@ -10,8 +10,8 @@
 using namespace cv;
 using namespace std;
 
-const int N = 256; // 512;
-const int M = 256; // 512;
+const int N = 512;
+const int M = 512;
 float input[N][M], output[N][M];
 int i, j, k1, l1, l2, k2, l3, k3, p, q;
 const int R = 5;
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		imagePath = "../../images/NCT1.png";
+		imagePath = "../../../images/512x512.png";
 	}
 
 	input_mat = imread(imagePath);

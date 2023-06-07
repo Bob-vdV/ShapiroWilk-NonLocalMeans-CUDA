@@ -1,3 +1,4 @@
+#include "cnlm.hpp"
 #include "swnlm.hpp"
 #include "utils.hpp"
 
@@ -128,8 +129,8 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm> &algorith
 
 int main()
 {
-    const string imageDir("../../../images/");
-    const string outputDir("../../../output/");
+    const string imageDir("../../../images/SIPI/misc/");
+    const string outputDir("../../../output/SIPI/misc/");
 
     // Add all images in images dir for testing
     vector<string> images;
@@ -140,7 +141,9 @@ int main()
 
     // Add functions to test
     vector<DenoiseAlgorithm> algorithms = {
-        DenoiseAlgorithm("swnlm", &swnlm)};
+        DenoiseAlgorithm("swnlm", &swnlm),
+        DenoiseAlgorithm("cnlm", &cnlm)
+        };
 
     vector<double> sigmas = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
 

@@ -198,7 +198,7 @@ void test(string imagePath)
 int main()
 {
     vector<string> images = {
-        "../../images/256x256.png"
+        "../../../images/mandril.tif"
 
         /*
         "../../images/64x64.png",
