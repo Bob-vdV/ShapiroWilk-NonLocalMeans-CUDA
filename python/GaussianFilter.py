@@ -18,7 +18,7 @@ def main():
 
     denoisedImage  = cv2.GaussianBlur(noisyImage, (kernelDiam, kernelDiam), k * sigma)
 
-    diff = inputImage - denoisedImage
+    diff = cv2.absdiff(inputImage, denoisedImage)
 
     cv2.imshow("input Image", inputImage)
     cv2.imshow("noisy Image", noisyImage)
