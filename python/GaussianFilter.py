@@ -25,10 +25,10 @@ def main():
     cv2.imshow("denoised Image", denoisedImage)
     cv2.imshow("Difference", diff)
 
-    cv2.imwrite("gaussianblur/original.tiff", inputImage)
-    cv2.imwrite("gaussianblur/noisy.tiff", inputImage)
-    cv2.imwrite("gaussianblur/denoised_sigma=6_k=10.tiff", inputImage)
-    cv2.imwrite("gaussianblur/difference.tiff", inputImage)
+    cv2.imwrite("gaussianblur/original.png", inputImage * 255)
+    cv2.imwrite("gaussianblur/noisy.png", noisyImage * 255 )
+    cv2.imwrite("gaussianblur/denoised_sigma=6_k=10.png", denoisedImage * 255 )
+    cv2.imwrite("gaussianblur/difference.png", diff * 255)
 
     cv2.waitKey(0)
 
