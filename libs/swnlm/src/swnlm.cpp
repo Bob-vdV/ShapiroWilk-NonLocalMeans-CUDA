@@ -21,10 +21,16 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
     Mat paddedImage;
     copyMakeBorder(noisyImage, paddedImage, padding, padding, padding, padding, BORDER_REFLECT);
 
-    const int shape[] = {rows, cols};
-    denoised.create(2, shape, noisyImage.type());
+    const int paddedFlat[] = {paddedImage.total()};
+    paddedImage = paddedImage.reshape(0, 1, paddedFlat);
+    double *in = (double *)paddedImage.data;
 
-    ShapiroWilk swilk(pow((neighborRadius * 2 + 1), 2));
+    const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
+    ShapiroWilk swilk(numNeighbors);
+
+    const int flatShape[] = {rows * cols};
+    denoised.create(1, flatShape, noisyImage.type());
+    double *denoisedOut = (double *)denoised.data;
 
     for (int row = padding; row < rows + padding; row++)
     {
@@ -33,9 +39,6 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
             double Wmax = 0;
             double avg = 0;
             double sumWeights = 0;
-
-            const Range rangesI[] = {Range(row - neighborRadius, row + neighborRadius + 1), Range(col - neighborRadius, col + neighborRadius + 1)};
-            const Mat neighborhoodI = paddedImage(rangesI);
 
             for (int sRow = row - searchRadius; sRow <= row + searchRadius; sRow++)
             {
@@ -46,46 +49,70 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
                         continue;
                     }
 
-                    const Range rangesJ[] = {Range(sRow - neighborRadius, sRow + neighborRadius + 1), Range(sCol - neighborRadius, sCol + neighborRadius + 1)};
-                    const Mat neighborhoodJ = paddedImage(rangesJ);
+                    double *diff = new double[numNeighbors];
+                    const int neighborDiam = neighborRadius * 2 + 1;
+                    for (int y = 0; y < neighborDiam; y++)
+                    {
+                        for (int x = 0; x < neighborDiam; x++)
+                        {
+                            const int diffIdx = y * neighborDiam + x;
+                            const int iNghbrIdx = (2 * padding + cols) * (row + y - neighborRadius) + col + x - neighborRadius;
+                            const int jNghbrIdx = (2 * padding + cols) * (sRow + y - neighborRadius) + sCol + x - neighborRadius;
 
-                    Mat difference = neighborhoodI - neighborhoodJ;
-                    Mat normalized = difference / (sqrt(2) * sigma);
-
-                    assert(normalized.isContinuous());
-                    std::vector<double> array;
-                    array.assign((double *)normalized.data, (double *)normalized.data + normalized.total());
+                            diff[diffIdx] = (in[iNghbrIdx] - in[jNghbrIdx]) / (sqrt(2.0) * sigma);
+                        }
+                    }
 
                     double w, pw;
-                    swilk.test(array, w, pw);
+                    swilk.test(diff, w, pw);
 
                     // cout << w << '\t' << pw << '\n';
-                    Scalar mean, stdev;
-                    cv::meanStdDev(normalized, mean, stdev);
+                    double mean = 0;
+                    for (int i = 0; i < numNeighbors; i++)
+                    {
+                        mean += diff[i];
+                    }
+                    mean /= numNeighbors;
 
-                    double stderror = stdev[0] / normalized.rows; // Neighborhoods are square, thus sqrt(n) observations is number of rows
+                    double stddev = 0;
+                    for (int i = 0; i < numNeighbors; i++)
+                    {
+                        stddev += (diff[i] - mean) * (diff[i] - mean);
+                    }
+                    stddev /= numNeighbors;
+                    stddev = sqrt(stddev);
 
-                    if (stderror > mean[0] && mean[0] > -stderror &&
-                        (1 + stderror > stdev[0] && stdev[0] > 1 - stderror) &&
-                        pw > alpha)
+                    delete[] diff;
+
+                    double stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
+
+                    if (stderror > mean && mean > -stderror &&
+                        (1 + stderror > stddev && stddev > 1 - stderror) &&
+                        (pw > alpha)) // Fail to reject Null hypothesis that it is not normally distributed
                     {
                         Wmax = max(w, Wmax);
 
                         sumWeights += w;
-                        avg += w * paddedImage.at<double>(sRow, sCol);
+
+                        avg += w * in[(2 * padding + cols) * sRow + sCol];
                     }
                 }
             }
-            avg += Wmax * paddedImage.at<double>(row, col);
+            avg += Wmax * in[(2 * padding + cols) * row + col];
             sumWeights += Wmax;
+
+            const int denoisedIdx = (row - padding) * cols + col - padding;
             if (sumWeights > 0)
             {
-                denoised.at<double>(row - padding, col - padding) = avg / sumWeights;
+                denoisedOut[denoisedIdx] = avg / sumWeights;
             }
             else
             {
-                denoised.at<double>(row - padding, col - padding) = paddedImage.at<double>(row, col);
+                denoisedOut[denoisedIdx] = in[(2 * padding + cols) * row + col];
             }
         }
     }
+
+    const int shape[] = {rows, cols};
+    denoised = denoised.reshape(0, 2, shape);
 }

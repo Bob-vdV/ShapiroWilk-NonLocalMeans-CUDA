@@ -16,8 +16,6 @@
 using namespace cv;
 using namespace std;
 
-typedef void (*NLMFunction)(const Mat &, Mat &, const double, const int, const int);
-
 typedef struct DenoiseAlgorithm
 {
     const string name;
@@ -142,8 +140,7 @@ int main()
     // Add functions to test
     vector<DenoiseAlgorithm> algorithms = {
         DenoiseAlgorithm("swnlm", &swnlm),
-        DenoiseAlgorithm("cnlm", &cnlm)
-        };
+        DenoiseAlgorithm("cnlm", &cnlm)};
 
     vector<double> sigmas = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
 

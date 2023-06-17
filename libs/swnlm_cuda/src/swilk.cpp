@@ -93,6 +93,7 @@ ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
  */
 void ShapiroWilk::test(double *x, double &w, double &pw) const
 {
+    assert(size == x.size());
     const int n = size;
 
     sort(x, x + size);

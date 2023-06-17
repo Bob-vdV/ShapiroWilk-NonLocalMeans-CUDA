@@ -1,3 +1,4 @@
 add_subdirectory(cnlm)
 add_subdirectory(swnlm)
+add_subdirectory(swnlm_cuda)
 add_subdirectory(utils)

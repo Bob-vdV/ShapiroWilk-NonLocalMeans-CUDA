@@ -7,20 +7,18 @@
  *
  */
 
-#include "swilk.hpp"
-#include "swilkutils.hpp"
+#include "swilk.cuh"
+#include "swilkutils.cuh"
 
-#include <algorithm>
 #include <cmath>
 #include <cassert>
 #include <vector>
-
-#include <iostream>
+#include <iterator>
 
 using namespace std;
 
-ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
-                                              a(size + 1) /* 1-based */
+// IMPORTANT: a must have (size+1) elements
+__host__ void setup(double *a, const size_t size)
 {
     const int n = size;
 
@@ -91,11 +89,10 @@ ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
  * @param x
  * @return
  */
-void ShapiroWilk::test(double *x, double &w, double &pw) const
+__device__ void test(double *x, const double *a, const int size, double &w, double &pw)
 {
     const int n = size;
-
-    sort(x, x + size);
+    sortArr(x, size);
 
     pw = 1.0;
 
@@ -128,6 +125,8 @@ void ShapiroWilk::test(double *x, double &w, double &pw) const
     for (i = 1, j = n - 1; i < n; j--)
     {
         xi = x[i] / range;
+
+        // assert(xx - xi <= small);
 
         sx += xi;
         i++;

@@ -2,6 +2,7 @@
 #define SWNLM_SWILK_HPP
 
 #include <vector>
+#include <cstddef>
 
 class ShapiroWilk
 {
@@ -11,9 +12,7 @@ private:
 
 public:
     ShapiroWilk(const size_t size);
-    void test(std::vector<double> &x, double &w, double &pw) const;
+    void test(double *x, double &w, double &pw) const;
 };
-
-void test(std::vector<double> &x, double &w, double &pw);
 
 #endif
