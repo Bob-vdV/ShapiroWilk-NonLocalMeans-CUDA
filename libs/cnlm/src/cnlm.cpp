@@ -16,10 +16,19 @@ using namespace std;
 const int x_i = 68;
 const int y_i = 32; 
 
-const int x_j = 68;
+const int x_j = 58;
 const int y_j = 42;
 
+void saveImage(string filename, Mat image){
+    string outDir = "../../../output/ThesisImages/";
 
+    outDir = outDir.append(filename);
+
+    Mat converted;
+    image.convertTo(converted, CV_16U, 65535.0);
+
+    cv::imwrite(outDir, converted);
+}
 
 
 void makeGaussianKernel(Mat &gaussKernel, const int neighborRadius, const int type)
@@ -92,26 +101,28 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
     Mat res;
     cv::multiply(Ni, gaussKernel, res);
     
-    imwrite("../../../output/ThesisImages/Gblur_GaussKernel.tiff", gaussKernel);
+    saveImage("Gblur_GaussKernel.png", gaussKernel);
     imwrite("../../../output/ThesisImages/Gblur_noisyWithRect.png", copy);
-    imwrite("../../../output/ThesisImages/Gblur_Ni.tiff", Ni);
-    imwrite("../../../output/ThesisImages/Gblur_NoisyGauss.tiff", res);
 
+    saveImage("Gblur_Ni.png", Ni);
+    saveImage("Gblur_NoisyGauss.png", res);
 
     cv::rectangle(copy, Point(x_i - searchRadius - 1, y_i - searchRadius - 1), Point(x_i + searchRadius + 1, y_i + searchRadius + 1), blue);
     cv::rectangle(copy, Point(x_j - neighborRadius - 1, y_j - neighborRadius - 1),Point(x_j + neighborRadius + 1, y_j + neighborRadius + 1), green);
 
-    imwrite("../../../output/ThesisImages/CNLM_GaussKernel.tiff", gaussKernel);
+    saveImage("CNLM_GaussKernel.png", gaussKernel);
+    saveImage("CNLM_Ni.png", Ni);
+    saveImage("CNLM_Nj.png", Nj);
+
     imwrite("../../../output/ThesisImages/CNLM_noisyWithRect.png", copy);
-    imwrite("../../../output/ThesisImages/CNLM_Ni.tiff", Ni);
-    imwrite("../../../output/ThesisImages/CNLM_Nj.tiff", Nj);
+
 
     Mat diff = Ni - Nj;
     diff = diff.mul(diff);
-    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2.tiff", diff);
+    saveImage("CNLM_Ni-Nj2.png", diff);
 
     diff = diff.mul(gaussKernel);
-    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2G.tiff", diff);
+    saveImage("CNLM_Ni-Nj2G.png", diff);
     }
 
 
@@ -152,6 +163,5 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
             denoised.at<double>(row - padding, col - padding) = val;
         }
     }
-
-    imwrite("../../../output/ThesisImages/CNLM_denoised.tiff", denoised);
+    saveImage("CNLM_denoised.png", denoised);
 }
