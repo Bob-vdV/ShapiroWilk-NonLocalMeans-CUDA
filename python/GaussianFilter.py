@@ -1,6 +1,10 @@
 import cv2
 import numpy as np
 
+
+
+
+
 def main():
     sigma = 40 / 255.0
     k = 10

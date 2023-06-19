@@ -4,12 +4,23 @@
 
 // todo remove
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <iostream>
 #include <chrono>
 
 using namespace cv;
 using namespace std;
+
+//TODO: remove
+const int x_i = 68;
+const int y_i = 32; 
+
+const int x_j = 68;
+const int y_j = 42;
+
+
+
 
 void makeGaussianKernel(Mat &gaussKernel, const int neighborRadius, const int type)
 {
@@ -57,6 +68,53 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
     Mat gaussKernel;
     makeGaussianKernel(gaussKernel, neighborRadius, type);
 
+    //TODO: remove block
+    {
+
+    Mat copy = noisyImage.clone();
+
+    Rect rect_i(Point(x_i - neighborRadius, y_i - neighborRadius),Point(x_i + neighborRadius + 1, y_i + neighborRadius + 1) );
+    Mat Ni = copy(rect_i).clone();
+    
+    Rect rect_j(Point(x_j - neighborRadius, y_j - neighborRadius),Point(x_j + neighborRadius + 1, y_j + neighborRadius + 1) );
+    Mat Nj = copy(rect_j).clone();
+
+    copy.convertTo(copy, CV_8UC1, 255.0);
+    cvtColor(copy, copy, cv::COLOR_GRAY2BGR);
+
+    Scalar orange(0, 140, 255);
+    Scalar blue(255, 144, 30);
+    Scalar green(0, 128, 0);
+
+
+    cv::rectangle(copy, Point(x_i - neighborRadius - 1, y_i - neighborRadius - 1),Point(x_i + neighborRadius + 1, y_i + neighborRadius + 1), orange);
+
+    Mat res;
+    cv::multiply(Ni, gaussKernel, res);
+    
+    imwrite("../../../output/ThesisImages/Gblur_GaussKernel.tiff", gaussKernel);
+    imwrite("../../../output/ThesisImages/Gblur_noisyWithRect.png", copy);
+    imwrite("../../../output/ThesisImages/Gblur_Ni.tiff", Ni);
+    imwrite("../../../output/ThesisImages/Gblur_NoisyGauss.tiff", res);
+
+
+    cv::rectangle(copy, Point(x_i - searchRadius - 1, y_i - searchRadius - 1), Point(x_i + searchRadius + 1, y_i + searchRadius + 1), blue);
+    cv::rectangle(copy, Point(x_j - neighborRadius - 1, y_j - neighborRadius - 1),Point(x_j + neighborRadius + 1, y_j + neighborRadius + 1), green);
+
+    imwrite("../../../output/ThesisImages/CNLM_GaussKernel.tiff", gaussKernel);
+    imwrite("../../../output/ThesisImages/CNLM_noisyWithRect.png", copy);
+    imwrite("../../../output/ThesisImages/CNLM_Ni.tiff", Ni);
+    imwrite("../../../output/ThesisImages/CNLM_Nj.tiff", Nj);
+
+    Mat diff = Ni - Nj;
+    diff = diff.mul(diff);
+    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2.tiff", diff);
+
+    diff = diff.mul(gaussKernel);
+    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2*G.tiff", diff);
+    }
+
+
     const int shape[] = {rows, cols};
     denoised.create(2, shape, type);
     for (int row = padding; row < rows + padding; row++)
@@ -94,4 +152,6 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
             denoised.at<double>(row - padding, col - padding) = val;
         }
     }
+
+    imwrite("../../../output/ThesisImages/CNLM_denoised.tiff", denoised);
 }
