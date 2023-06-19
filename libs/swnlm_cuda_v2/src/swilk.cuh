@@ -1,8 +1,7 @@
-#ifndef SWNLM_SWILK_CUH
-#define SWNLM_SWILK_CUH
+#ifndef SWNLM_SWILK_HPP
+#define SWNLM_SWILK_HPP
 
 #include "swilkutils.cuh"
-#include "sort.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -11,15 +10,13 @@
 
 namespace ShapiroWilk
 {
-    const size_t MAXSIZE = 5000;
-
     // IMPORTANT: a should have allocated size+1
     void setup(double *a, const int size)
     {
         const int n = size;
 
         assert(n >= 3);
-        assert(n <= MAXSIZE);
+        assert(n <= 5000);
 
         const int nn2 = n / 2;
 
@@ -85,14 +82,13 @@ namespace ShapiroWilk
      * @param x
      * @return
      */
-    __device__ void test(double *x, const double *a, const int size, double &w, bool &hypothesis)
+    __device__ void test(double *x, const double *a, const int size, double &w, double &pw)
     {
         const int n = size;
 
-        heapSort(x, size);
-        //sortArr(x, size);
+        sortArr(x, size);
 
-        //pw = 1.0;
+        pw = 1.0;
 
         /* polynomial coefficients */
         const double g[] = {-2.273, 0.459};
@@ -164,7 +160,6 @@ namespace ShapiroWilk
         w = 1.0 - w1;
         /* Calculate significance level for W */
 
-        bool pw;
         if (n == 3)
         {                                         /* exact P value : */
             const double pi6 = 1.90985931710274;  /* = 6/pi */
@@ -174,11 +169,7 @@ namespace ShapiroWilk
             {
                 pw = 0;
             }
-            if (pw < 0.05){
-                hypothesis = false;
-            } else {
-                hypothesis = true;
-            }
+            // return w;
             return;
         }
         y = log(w1);
@@ -188,8 +179,8 @@ namespace ShapiroWilk
             gamma = poly(g, 2, an);
             if (y >= gamma)
             {
-                //pw = 0; 
-                hypothesis = false;
+                pw = 1e-99; /* an "obvious" value, was 'small' which was 1e-19f */
+                // return w;
                 return;
             }
             y = -log(gamma - y);
@@ -202,10 +193,10 @@ namespace ShapiroWilk
             s = exp(poly(c6, 3, xx));
         }
 
+        // Oops, we don't have pnorm
+        // pw = pnorm(y, m, s, 0/* upper tail */, 0);
         const double z = (y - m) / s;
-
-        hypothesis = testHypothesis(z);
-        //pw = gaussCdf(z);
+        pw = gaussCdf(z);
         return;
     }
 }

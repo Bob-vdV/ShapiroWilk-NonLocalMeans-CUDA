@@ -13,6 +13,7 @@ int main()
     const double sigma = 30.0 / 255;
     const int searchRadius = 10;
     const int neighborRadius = 3;
+    const bool showImg = true;
 
-    testNLM(filename, sigma, searchRadius, neighborRadius, &swnlmcuda);
+    testNLM(filename, sigma, searchRadius, neighborRadius, &swnlmcuda, showImg);
 }

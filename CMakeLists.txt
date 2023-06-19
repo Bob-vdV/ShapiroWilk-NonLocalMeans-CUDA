@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-set(CMAKE_CUDA_ARCHITECTURES 60)
+set(CMAKE_CUDA_ARCHITECTURES 61)
 
 project( NonLocalMeans VERSION 1.00 LANGUAGES CXX CUDA)
 

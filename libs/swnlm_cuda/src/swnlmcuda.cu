@@ -7,102 +7,162 @@
 #include <vector>
 
 #include <cuda.h>
+#include <cuda_profiler_api.h>
 
 using namespace std;
 using namespace cv;
 
-__device__ void atomicMax_block(double *addr, double val){
-    unsigned long long int cmp = *addr < val;
-    atomicCAS_block((unsigned long long int* )addr, cmp, *(unsigned long long int*)&val);
+// Constant memory for coefficients a_i for shapiro wilk test
+__constant__ double a[ShapiroWilk::MAXSIZE];
+
+// Based on https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+__device__ void reduceSum(double *array, double val)
+{
+    int idx = threadIdx.y * blockDim.x + threadIdx.x;
+
+    array[idx] = val;
+    __syncthreads();
+
+    int i = 2;
+    while (i / 2 < blockDim.x * blockDim.y)
+    {
+        idx = threadIdx.y * blockDim.x + threadIdx.x;
+        if (idx % i == 0 && idx + i / 2 < blockDim.x * blockDim.y)
+        {
+            array[idx] += array[idx + i / 2];
+        }
+
+        i *= 2;
+        __syncthreads();
+    }
 }
 
-__global__ void kernel(const double *in, const double *a, double *out, int rows, int cols, int searchRadius, int neighborRadius, double sigma, double alpha)
+__global__ void kernel(const double *in, double *out, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
 {
     const int padding = searchRadius + neighborRadius;
 
-    const int row = padding + blockIdx.y;
-    const int col = padding + blockIdx.x;
+    extern __shared__ double searchWindow[];
+    // Copy Search window into shared memory
+    const size_t searchWindowWidth = (2 * padding + 1);
+    const size_t inCols = cols + 2 * padding;
 
-    const int sRow = threadIdx.y + row - searchRadius;
-    const int sCol = threadIdx.x + col - searchRadius;
+    int i = 0;
+    int idx = (threadIdx.y + blockDim.y * i) * searchWindowWidth + threadIdx.x + blockDim.x * i;
 
-    const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
-
-    __shared__ double Wmax;
-    __shared__ double avg;
-    __shared__ double sumWeights;
-
-    if (threadIdx.x == 0 && threadIdx.y == 0)
+    while (idx < searchWindowWidth * searchWindowWidth)
     {
-        Wmax = 0;
-        avg = 0;
-        sumWeights = 0;
+        searchWindow[idx] = in[(blockIdx.y + threadIdx.y + blockDim.y * i) * inCols + blockIdx.x + threadIdx.x + blockDim.x * i];
+
+        i++;
+        idx = (threadIdx.y + blockDim.y * i) * searchWindowWidth + threadIdx.x + blockDim.x * i;
     }
+
     __syncthreads();
 
-    if (sRow == row && sCol == col)
+    double w, res;
+
+    if (threadIdx.x == searchRadius && threadIdx.y == searchRadius)
     { // center pixel is skipped
-        return;
+        w = 1;
+        res = 1 * searchWindow[searchWindowWidth * padding + padding];
     }
-
-    double *diff = new double[numNeighbors];
-    const int neighborDiam = neighborRadius * 2 + 1;
-    for (int y = 0; y < neighborDiam; y++)
+    else
     {
-        for (int x = 0; x < neighborDiam; x++)
-        {
-            const int diffIdx = y * neighborDiam + x;
-            const int iNghbrIdx = (2 * padding + cols) * (row + y - neighborRadius) + col + x - neighborRadius;
-            const int jNghbrIdx = (2 * padding + cols) * (sRow + y - neighborRadius) + sCol + x - neighborRadius;
+        const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
 
-            diff[diffIdx] = (in[iNghbrIdx] - in[jNghbrIdx]) / (sqrt(2.0) * sigma);
+        double *diff = NULL;
+        while (diff == NULL)
+        {
+            diff = new double[numNeighbors];
+        }
+
+        const int neighborDiam = neighborRadius * 2 + 1;
+        for (int y = 0; y < neighborDiam; y++)
+        {
+            for (int x = 0; x < neighborDiam; x++)
+            {
+                const int diffIdx = y * neighborDiam + x;
+                const int iNghbrIdx = searchWindowWidth * (y + searchRadius) + x + searchRadius;
+                const int jNghbrIdx = searchWindowWidth * (y + threadIdx.y) + x + threadIdx.x;
+
+                diff[diffIdx] = (searchWindow[iNghbrIdx] - searchWindow[jNghbrIdx]) / (sqrt(2.0) * sigma);
+            }
+        }
+
+        bool hypothesis;
+        ShapiroWilk::test(diff, &a[0], numNeighbors, w, hypothesis);
+
+        double mean = 0;
+        for (int i = 0; i < numNeighbors; i++)
+        {
+            mean += diff[i];
+        }
+        mean /= numNeighbors;
+
+        double stddev = 0;
+        for (int i = 0; i < numNeighbors; i++)
+        {
+            stddev += (diff[i] - mean) * (diff[i] - mean);
+        }
+        stddev /= numNeighbors;
+        stddev = sqrt(stddev);
+
+        delete[] diff;
+
+        double stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
+
+        if (stderror > mean && mean > -stderror &&
+            (1 + stderror > stddev && stddev > 1 - stderror) &&
+            hypothesis) // Fail to reject Null hypothesis that it is normally distributed
+        {
+            // ATOMIC OPERATIONS::
+            // atomicAdd_block(&sumWeights, w);
+
+            // atomicAdd_block(&avg, w * searchWindow[(threadIdx.y + neighborRadius) * searchWindowWidth + threadIdx.x + neighborRadius]);
+            res = w * searchWindow[(threadIdx.y + neighborRadius) * searchWindowWidth + threadIdx.x + neighborRadius];
+        }
+        else
+        {
+            w = 0;
+            res = 0;
         }
     }
 
-    double w, pw;
-    ShapiroWilk::test(diff, a, numNeighbors, w, pw);
+    // Search window is reused to save on shared memory
 
-    double mean = 0;
-    for (int i = 0; i < numNeighbors; i++)
-    {
-        mean += diff[i];
-    }
-    mean /= numNeighbors;
+    __shared__ double sumWeights;
+    __shared__ double avg;
 
-    double stddev = 0;
-    for (int i = 0; i < numNeighbors; i++)
-    {
-        stddev += (diff[i] - mean) * (diff[i] - mean);
-    }
-    stddev /= numNeighbors;
-    stddev = sqrt(stddev);
-
-    delete[] diff;
-
-    double stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
-
-    if (stderror > mean && mean > -stderror &&
-        (1 + stderror > stddev && stddev > 1 - stderror) &&
-        (pw > alpha)) // Fail to reject Null hypothesis that it is normally distributed
-    {
-
-        // ATOMIC OPERATIONS::
-
-        atomicMax_block(&Wmax, w);
-
-        atomicAdd_block(&sumWeights, w);
-
-        atomicAdd_block(&avg, w * in[(2 * padding + cols) * sRow + sCol]);
-    }
-
+    // W
     __syncthreads();
+    reduceSum(searchWindow, w);
 
     if (threadIdx.x == 0 && threadIdx.y == 0)
     {
-        avg += Wmax * in[(2 * padding + cols) * row + col];
-        sumWeights += Wmax;
+        sumWeights = searchWindow[0];
+    }
 
-        const int denoisedIdx = (row - padding) * cols + col - padding;
+    // Avg
+    __syncthreads();
+    reduceSum(searchWindow, res);
+
+    if (threadIdx.x == 0 && threadIdx.y == 0)
+    {
+        avg = searchWindow[0];
+
+        const int denoisedIdx = blockIdx.y * cols + blockIdx.x;
+        out[denoisedIdx] = avg / sumWeights;
+    }
+
+    /*
+    if (threadIdx.x == 0 && threadIdx.y == 0)
+    {
+        avg += 1 * searchWindow[searchWindowWidth * padding + padding]; // Note: 1 used instead of Wmax
+        sumWeights += 1;
+
+        const int denoisedIdx = blockIdx.y * cols + blockIdx.x;
+
+        // printf("%d, %d: %lf a: %lf\n", blockIdx.x, blockIdx.y, avg, a[5]);
 
         if (sumWeights > 0)
         {
@@ -110,22 +170,18 @@ __global__ void kernel(const double *in, const double *a, double *out, int rows,
         }
         else
         {
-            out[denoisedIdx] = in[(2 * padding + cols) * row + col];
+            out[denoisedIdx] = searchWindow[searchWindowWidth * padding + padding];
         }
-    }
+    }*/
 }
 
 void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius)
 {
-
-
     assert(noisyImage.type() == CV_64FC1);
     assert(noisyImage.dims == 2);
 
     const int rows = noisyImage.rows;
     const int cols = noisyImage.cols;
-
-    double alpha = 0.05; // threshold  for accepting null hypothesis. Typically is 0.05 for statistics
 
     // Pad the edges with a reflection of the outer pixels.
     const int padding = searchRadius + neighborRadius;
@@ -137,18 +193,16 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const i
     double *h_in = (double *)paddedImage.data;
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
-    vector<double> a(numNeighbors + 1);
-    ShapiroWilk::setup(a.data(), numNeighbors);
+    vector<double> h_a(numNeighbors + 1);
+    ShapiroWilk::setup(h_a.data(), numNeighbors);
 
-    double *d_in, *d_a, *d_out;
+    double *d_in, *d_out;
     const int inSize = paddedImage.total() * paddedImage.channels() * paddedImage.elemSize();
     cudaMalloc(&d_in, inSize);
     assert(d_in != NULL);
-    cudaMemcpy(d_in, h_in, inSize, cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_in, h_in, inSize, cudaMemcpyHostToDevice);
 
-    cudaMalloc(&d_a, (numNeighbors + 1) * sizeof(double));
-    assert(d_a != NULL);
-    cudaMemcpy(d_a, a.data(), (numNeighbors + 1) * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpyToSymbolAsync(a, h_a.data(), (numNeighbors + 1) * sizeof(double));
 
     // Allocate output array
     const int flatShape[] = {rows * cols};
@@ -159,68 +213,16 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const i
     cudaMalloc(&d_out, outSize);
     assert(d_out != NULL);
 
-
-
     const dim3 blocks(rows, cols);
 
     const int searchDiam = 2 * searchRadius + 1;
     const dim3 threads(searchDiam, searchDiam);
 
-    kernel<<<blocks, threads>>>(d_in, d_a, d_out, rows, cols, searchRadius, neighborRadius, sigma, alpha);
+    cudaDeviceSynchronize();
 
-    /*
-    for (int row = padding; row < rows + padding; row++)
-    {
-        for (int col = padding; col < cols + padding; col++)
-        {
-            Range searchRanges[] = {Range(row - searchRadius, row + searchRadius + 1), Range(col - searchRadius, col + searchRadius + 1)};
-            const int numSearches = (2 * searchRadius + 1) * (2 * searchRadius + 1);
-            const int searchShape[] = {numSearches};
-            Mat searchWindow = paddedImage(searchRanges).clone().reshape(0, 1, searchShape);
-            double *h_s = (double *)searchWindow.data;
-
-            // TODO laucnh kernels, then collect sums later
-
-            kernel<<<1, >>>(d_in, const double *a, double *out, int rows, int cols, int searchRadius, int neighborRadius, double sigma, double alpha))
-
-            avg += Wmax * in[(2 * padding + cols) * row + col];
-            sumWeights += Wmax;
-
-            const int denoisedIdx = (row - padding) * cols + col - padding;
-            if (sumWeights > 0)
-            {
-                out[denoisedIdx] = avg / sumWeights;
-            }
-            else
-            {
-                out[denoisedIdx] = in[(2 * padding + cols) * row + col];
-            }
-        }
-    }*/
-    /*
-        const int flatShape[] = {rows * cols};
-        denoised.create(1, flatShape, noisyImage.type());
-        double *h_out = (double *)denoised.data;
-
-        const int blockSize = 512;
-
-        double *d_in, *d_out, *d_a;
-
-        // Allocate input arrays
-        const int inSize = paddedImage.total() * paddedImage.channels() * paddedImage.elemSize();
-        cudaMalloc(&d_in, inSize);
-        cudaMemcpy(d_in, h_in, inSize, cudaMemcpyHostToDevice);
-
-        cudaMalloc(&d_a, (numNeighbors + 1) * sizeof(double));
-        cudaMemcpy(d_a, a.data(), (numNeighbors + 1) * sizeof(double), cudaMemcpyHostToDevice);
-
-        // Allocate output array
-        const int outSize = denoised.total() * denoised.channels() * denoised.elemSize();
-        cudaMalloc(&d_out, outSize);
-
-        kernel<<<rows, cols>>>(d_in, d_a, d_out, rows, cols, searchRadius, neighborRadius, sigma, alpha);
-
-        */
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)2 * 1024 * 1024 * 1024); // Set to 2 GB
+    const size_t sharedMemSize = (2 * padding + 1) * (2 * padding + 1) * sizeof(double);
+    kernel<<<blocks, threads, sharedMemSize>>>(d_in, d_out, rows, cols, searchRadius, neighborRadius, sigma);
 
     cudaDeviceSynchronize();
     cudaMemcpy(h_out, d_out, outSize, cudaMemcpyDeviceToHost);
@@ -229,6 +231,7 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const i
     denoised = denoised.reshape(0, 2, shape);
 
     cudaFree(d_in);
-    cudaFree(d_a);
     cudaFree(d_out);
+
+    cudaProfilerStop();
 }

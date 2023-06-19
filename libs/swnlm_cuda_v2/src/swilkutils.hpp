@@ -9,6 +9,4 @@ double poly(const double cc[], const int nord, const double x);
 
 int sign(const double x);
 
-
-
 #endif

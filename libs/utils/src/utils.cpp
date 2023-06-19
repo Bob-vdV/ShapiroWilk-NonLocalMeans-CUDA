@@ -67,7 +67,7 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage)
     return (luminance * contrast * structure + 1) / 2;
 }
 
-void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction nlmFunction)
+void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction nlmFunction, const bool showImg)
 {
     // Ensure that program runs sequentially
     cv::setNumThreads(1);
@@ -86,9 +86,6 @@ void testNLM(const string filename, const double sigma, const int searchRadius, 
 
     cout << "Noisy image PSNR: " << computePSNR(floatImage, noisyImage) << '\n';
 
-    imshow("original image", inputImage);
-    imshow("noisy image", noisyImage);
-
     const chrono::system_clock::time_point start = chrono::high_resolution_clock::now();
 
     Mat denoised;
@@ -102,9 +99,11 @@ void testNLM(const string filename, const double sigma, const int searchRadius, 
     const double denoisedPSNR = computePSNR(floatImage, denoised);
     cout << "Denoised image PSNR: " << denoisedPSNR << '\n';
 
-    // denoised.convertTo(denoised, inputImage.type(), 255.0);
-
-    cv::imshow("Denoised", denoised);
-
-    waitKey();
+    if (showImg)
+    {
+        imshow("original image", inputImage);
+        imshow("noisy image", noisyImage);
+        imshow("Denoised", denoised);
+        waitKey();
+    }
 }

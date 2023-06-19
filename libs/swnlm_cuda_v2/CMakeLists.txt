@@ -4,8 +4,18 @@ target_sources(swnlmCudaLib
     PRIVATE 
         src/swnlmcuda.cu
         src/swilk.cuh
+        #src/swilk.cu 
         src/swilkutils.cuh 
-        src/sort.cuh
+        #src/swilkutils.cu
+        
+        #src/helper_cuda.h
+        #src/helper_string.h
+
+        #src/swilk.cpp 
+        #src/swilk.hpp 
+        #src/swilkutils.hpp 
+        #src/swilkutils.cpp
+
 
     PUBLIC 
         inc/swnlmcuda.cuh

@@ -123,14 +123,6 @@ namespace
         return (1.0 - p) / 2.0;
     }
 
-    /// @brief  Tests the Null hypothesis if it is rejected or not for alpha=0.05. This is a simple replacement for GaussCdf function.
-    /// @param z The z value produced by Shapiro wilk algorithm
-    /// @return False if rejected, true if not rejected
-    __host__ __device__ bool testHypothesis(const double z)
-    {
-        return z > -1.6448536244853624311;
-    }
-
     /**
      * Used internally by ShapiroWilkW().
      *
