@@ -111,7 +111,7 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
     imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2.tiff", diff);
 
     diff = diff.mul(gaussKernel);
-    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2*G.tiff", diff);
+    imwrite("../../../output/ThesisImages/CNLM_Ni-Nj2G.tiff", diff);
     }
 
 
