@@ -8,11 +8,12 @@
 using namespace std;
 using namespace cv;
 
-double computePSNR(const Mat &baseImage, const Mat &changedImage)
+double computePSNR(const Mat &baseImage, const Mat &changedImage, const double max = 255.0)
 {
     const int numChannels = baseImage.channels();
 
-    Mat difference = baseImage - changedImage;
+    Mat difference;
+    cv::subtract(baseImage, changedImage, difference, noArray(), CV_64FC1);
 
     double mse = 0;
     const Scalar mean = cv::mean(difference.mul(difference));
@@ -22,13 +23,19 @@ double computePSNR(const Mat &baseImage, const Mat &changedImage)
     }
     mse /= numChannels;
 
-    const double psnr = 20 * log10(1 / sqrt(mse));
+    const double psnr = 20 * log10(max / sqrt(mse));
 
     return psnr;
 }
 
-double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage)
+//template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+
+template <typename T>
+double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max)
 {
+    assert(baseImage.type() == cv::DataType<T>::type);
+    assert(changed.type() == cv::DataType<T>::type);
+
     Scalar baseMean, baseStdev;
     Scalar changedMean, changedStdev;
 
@@ -42,17 +49,17 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage)
     const double k1 = 0.01;
     const double k2 = 0.03;
 
-    const double c1 = k1 * k1;
-    const double c2 = k2 * k2;
+    const double c1 = std::pow(k1 * max, 2);
+    const double c2 = std::pow(k2 * max, 2);
     const double c3 = c2 / 2;
 
     const double luminance = (2 * (baseMean[0] * changedMean[0]) + c1) / (baseMean[0] * baseMean[0] + changedMean[0] * changedMean[0] + c1);
 
     const double contrast = (2 * baseVariance * changedVariance + c2) / (baseVariance * baseVariance + changedVariance * changedVariance + c2);
 
-    auto baseIt = baseImage.begin<double>();
-    auto changedIt = changedImage.begin<double>();
-    auto baseEnd = baseImage.end<double>();
+    auto baseIt = baseImage.begin<T>();
+    auto changedIt = changedImage.begin<T>();
+    auto baseEnd = baseImage.end<T>();
 
     double covariance = 0;
 
@@ -67,7 +74,16 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage)
     return (luminance * contrast * structure + 1) / 2;
 }
 
-void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction nlmFunction, const bool showImg)
+typedef void (*NLMFunction_short)(const cv::Mat &, cv::Mat &, const short, const int, const int);
+typedef void (*NLMFunction_float)(const cv::Mat &, cv::Mat &, const float, const int, const int);
+typedef void (*NLMFunction_double)(const cv::Mat &, cv::Mat &, const double, const int, const int);
+
+template void testNLM(const string filename, const short sigma, const int searchRadius, const int neighborRadius, NLMFunction_short nlmFunction, const bool showImg);
+template void testNLM(const string filename, const float sigma, const int searchRadius, const int neighborRadius, NLMFunction_float nlmFunction, const bool showImg);
+template void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction_double nlmFunction, const bool showImg);
+
+template <typename T, typename Function>
+void testNLM(const string filename, const T sigma, const int searchRadius, const int neighborRadius, Function nlmFunction, const bool showImg)
 {
     // Ensure that program runs sequentially
     cv::setNumThreads(1);
@@ -76,13 +92,18 @@ void testNLM(const string filename, const double sigma, const int searchRadius, 
     cvtColor(inputImage, inputImage, COLOR_RGB2GRAY);
 
     Mat floatImage;
-    inputImage.convertTo(floatImage, CV_64FC1, 1 / 255.0);
+    inputImage.convertTo(floatImage, CV_64FC1);
 
     Mat noise = floatImage.clone();
     randn(noise, 0, sigma);
 
     Mat noisyImage = floatImage.clone();
     cv::add(floatImage, noise, noisyImage);
+
+    noisyImage = cv::min(cv::max(noisyImage, 0), 255);
+
+    noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
+    floatImage.convertTo(floatImage, cv::DataType<T>::type);
 
     cout << "Noisy image PSNR: " << computePSNR(floatImage, noisyImage) << '\n';
 
@@ -101,6 +122,9 @@ void testNLM(const string filename, const double sigma, const int searchRadius, 
 
     if (showImg)
     {
+        noisyImage.convertTo(noisyImage, CV_8UC1);
+        denoised.convertTo(denoised, CV_8UC1);
+
         imshow("original image", inputImage);
         imshow("noisy image", noisyImage);
         imshow("Denoised", denoised);

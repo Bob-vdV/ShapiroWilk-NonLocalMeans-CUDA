@@ -3,10 +3,8 @@
 
 #include "swilkutils.cuh"
 #include "sort.cuh"
-#include "bitonicsort.cuh"
 
 #include <thrust/sort.h>
-#include <thrust/execution_policy.h>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -88,17 +86,15 @@ namespace ShapiroWilk
      * @param x
      * @return
      */
-    template <typename T>
-    __device__ void test(T *x, const double *a, const int size, double &w, bool &hypothesis)
+    __device__ void test(double *x, const double *a, const int size, double &w, bool &hypothesis)
     {
         const int n = size;
 
-        // bitonicSort(x, size);
-        // thrust::sort(thrust::device, x, x + size);
+        thrust::sort(thrust::device, x, x + size);
         //heapSort(x, size);
-        // bubbleSort(x, size);
-        //insertionSort(x, size);
-        impBitonicSort(x, size);
+        //  sortArr(x, size);
+
+        // pw = 1.0;
 
         /* polynomial coefficients */
         const double g[] = {-2.273, 0.459};

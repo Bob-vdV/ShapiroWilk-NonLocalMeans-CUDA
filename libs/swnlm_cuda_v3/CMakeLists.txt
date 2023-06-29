@@ -5,7 +5,6 @@ target_sources(swnlmCudaLib
         src/swnlmcuda.cu
         src/swilk.cuh
         src/swilkutils.cuh 
-        src/bitonicsort.cuh
         src/sort.cuh
 
     PUBLIC 

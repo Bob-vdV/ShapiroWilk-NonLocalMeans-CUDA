@@ -12,13 +12,8 @@
 using namespace std;
 using namespace cv;
 
-template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const short sigma, const int searchRadius, const int neighborRadius);
-template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const float sigma, const int searchRadius, const int neighborRadius);
-template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
-
 // Based on https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
-template <typename T>
-__device__ void reduceSum(T *array, T val)
+__device__ void reduceSum(double *array, double val)
 {
     int idx = threadIdx.y * blockDim.x + threadIdx.x;
 
@@ -39,15 +34,11 @@ __device__ void reduceSum(T *array, T val)
     }
 }
 
-template <typename T>
-__global__ void kernel(const T *in, const double *a, T *out, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
+__global__ void kernel(const double *in, const double *a, double *out, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
 {
     const int padding = searchRadius + neighborRadius;
 
-    // Hacky workaround for using templated extern shared memory
-    extern __shared__ char smem[];
-    T * searchWindow = reinterpret_cast<T *>(smem);
-
+    extern __shared__ double searchWindow[];
     // Copy Search window into shared memory
     const size_t searchWindowWidth = (2 * padding + 1);
     const size_t inCols = cols + 2 * padding;
@@ -63,26 +54,14 @@ __global__ void kernel(const T *in, const double *a, T *out, int rows, int cols,
         idx = (threadIdx.y + blockDim.y * i) * searchWindowWidth + threadIdx.x + blockDim.x * i;
     }
 
-    __shared__ double sumWeights;
-    __shared__ double avg;
-
-    if(threadIdx.x == 0 && threadIdx.y == 0){
-        sumWeights = 0;
-        avg = 0;
-    }
-
     __syncthreads();
 
-    double w = 0;
-    double res = 0;
+    double w, res;
 
     if (threadIdx.x == searchRadius && threadIdx.y == searchRadius)
     { // center pixel is skipped
         w = 1;
         res = 1 * searchWindow[searchWindowWidth * padding + padding];
-
-        atomicAdd_block(&sumWeights, w);
-        atomicAdd_block(&avg, res);
     }
     else
     {
@@ -91,7 +70,7 @@ __global__ void kernel(const T *in, const double *a, T *out, int rows, int cols,
         double *diff = NULL;
         while (diff == NULL)
         {
-            diff = new double[numNeighbors]; 
+            diff = new double[numNeighbors];
         }
 
         const int neighborDiam = neighborRadius * 2 + 1;
@@ -133,25 +112,27 @@ __global__ void kernel(const T *in, const double *a, T *out, int rows, int cols,
             (1 + stderror > stddev && stddev > 1 - stderror) &&
             hypothesis) // Fail to reject Null hypothesis that it is normally distributed
         {
-            res = w * searchWindow[(threadIdx.y + neighborRadius) * searchWindowWidth + threadIdx.x + neighborRadius];
+            // ATOMIC OPERATIONS::
+            // atomicAdd_block(&sumWeights, w);
 
-            atomicAdd_block(&sumWeights, w);
-            atomicAdd_block(&avg, res);
+            // atomicAdd_block(&avg, w * searchWindow[(threadIdx.y + neighborRadius) * searchWindowWidth + threadIdx.x + neighborRadius]);
+            res = w * searchWindow[(threadIdx.y + neighborRadius) * searchWindowWidth + threadIdx.x + neighborRadius];
+        }
+        else
+        {
+            w = 0;
+            res = 0;
         }
     }
 
-    __syncthreads();
+    // Search window is reused to save on shared memory
 
-    if(threadIdx.x ==0 && threadIdx.y == 0){
-        const int denoisedIdx = blockIdx.y * cols + blockIdx.x;
+    __shared__ double sumWeights;
+    __shared__ double avg;
 
-        out[denoisedIdx] = min(max(avg / sumWeights, 0.0), 255.0);
-    }
-
-    /*
     // W
     __syncthreads();
-    reduceSum<T>(searchWindow, w);
+    reduceSum(searchWindow, w);
 
     if (threadIdx.x == 0 && threadIdx.y == 0)
     {
@@ -160,7 +141,7 @@ __global__ void kernel(const T *in, const double *a, T *out, int rows, int cols,
 
     // Avg
     __syncthreads();
-    reduceSum<T>(searchWindow, res);
+    reduceSum(searchWindow, res);
 
     if (threadIdx.x == 0 && threadIdx.y == 0)
     {
@@ -168,15 +149,32 @@ __global__ void kernel(const T *in, const double *a, T *out, int rows, int cols,
 
         const int denoisedIdx = blockIdx.y * cols + blockIdx.x;
         out[denoisedIdx] = avg / sumWeights;
+    }
+
+    /*
+    if (threadIdx.x == 0 && threadIdx.y == 0)
+    {
+        avg += 1 * searchWindow[searchWindowWidth * padding + padding]; // Note: 1 used instead of Wmax
+        sumWeights += 1;
+
+        const int denoisedIdx = blockIdx.y * cols + blockIdx.x;
+
+        // printf("%d, %d: %lf a: %lf\n", blockIdx.x, blockIdx.y, avg, a[5]);
+
+        if (sumWeights > 0)
+        {
+            out[denoisedIdx] = avg / sumWeights;
+        }
+        else
+        {
+            out[denoisedIdx] = searchWindow[searchWindowWidth * padding + padding];
+        }
     }*/
-
-
 }
 
-template <typename T>
-void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius)
+void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius)
 {
-    assert(noisyImage.type() == cv::DataType<T>::type);
+    assert(noisyImage.type() == CV_64FC1);
     assert(noisyImage.dims == 2);
 
     const int rows = noisyImage.rows;
@@ -189,14 +187,13 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
 
     const int paddedFlat[] = {(int)paddedImage.total()};
     paddedImage = paddedImage.reshape(0, 1, paddedFlat);
-    T *h_in = (T *)paddedImage.data;
+    double *h_in = (double *)paddedImage.data;
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
     vector<double> h_a(numNeighbors + 1);
     ShapiroWilk::setup(h_a.data(), numNeighbors);
 
-    T *d_in, *d_out;
-    double *d_a;
+    double *d_in, *d_a, *d_out;
     const int inSize = paddedImage.total() * paddedImage.channels() * paddedImage.elemSize();
     cudaMalloc(&d_in, inSize);
     assert(d_in != NULL);
@@ -209,13 +206,11 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
     // Allocate output array
     const int flatShape[] = {rows * cols};
     denoised.create(1, flatShape, noisyImage.type());
-    T *h_out = (T *)denoised.data;
+    double *h_out = (double *)denoised.data;
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();
     cudaMalloc(&d_out, outSize);
     assert(d_out != NULL);
-
-    const int searchWindowsPerBlock = 32; // Must be multiple of 32 (warp size)
 
     const dim3 blocks(rows, cols);
 
@@ -225,7 +220,7 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
     cudaDeviceSynchronize();
 
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)2 * 1024 * 1024 * 1024); // Set to 2 GB
-    const size_t sharedMemSize = (2 * padding + 1) * (2 * padding + 1) * sizeof(T);
+    const size_t sharedMemSize = (2 * padding + 1) * (2 * padding + 1) * sizeof(double);
     kernel<<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_out, rows, cols, searchRadius, neighborRadius, sigma);
 
     cudaDeviceSynchronize();

@@ -1,7 +1,7 @@
 add_subdirectory(cnlm)
 add_subdirectory(original)
 add_subdirectory(test)
-add_subdirectory(hdnlm)
+#add_subdirectory(hdnlm)
 add_subdirectory(swnlm)
 add_subdirectory(swnlm_cuda)
 add_subdirectory(eval)

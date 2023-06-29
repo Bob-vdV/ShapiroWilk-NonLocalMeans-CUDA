@@ -3,6 +3,7 @@
 
 #include <opencv2/core.hpp>
 
-void swnlmcuda(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
+template <typename T>
+void swnlmcuda(const cv::Mat &noisyImage, cv::Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius);
 
 #endif
