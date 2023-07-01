@@ -21,7 +21,7 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
     Mat paddedImage;
     copyMakeBorder(noisyImage, paddedImage, padding, padding, padding, padding, BORDER_REFLECT);
 
-    const int paddedFlat[] = {paddedImage.total()};
+    const int paddedFlat[] = {(int) paddedImage.total()};
     paddedImage = paddedImage.reshape(0, 1, paddedFlat);
     double *in = (double *)paddedImage.data;
 

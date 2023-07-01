@@ -14,7 +14,7 @@ using namespace cv;
 int main()
 {
     const string filename = "../../../images/mandril.tif";
-    const double sigma = 30.0 / 255;
+    const double sigma = 30;
     const int searchRadius = 10;
     const int neighborRadius = 3;
 

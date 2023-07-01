@@ -2,8 +2,9 @@
 #define SWNLM_SWILK_CUH
 
 #include "swilkutils.cuh"
-#include "sort.cuh"
+//#include "sort.cuh"
 #include "bitonicsort.cuh"
+//#include "radixsort.cuh"
 
 #include <thrust/sort.h>
 #include <thrust/execution_policy.h>
@@ -93,7 +94,25 @@ namespace ShapiroWilk
     {
         const int n = size;
 
-        heapSort(x, size);
+        // bitonicSort(x, size);
+        // thrust::sort(thrust::device, x, x + size);
+        // heapSort(x, size);
+        // bubbleSort(x, size);
+        // insertionSort(x, size);
+        impBitonicSort(x, size);
+
+        //doubleRadixSort(x, size);
+        
+        //radixSort(x, size);
+
+        /*
+        float *xOut = NULL;
+        while(xOut == NULL){
+            xOut = new float[size];
+        }
+
+        RadixSort11(x, xOut, size);
+        memcpy(x, xOut, size * sizeof(T));*/
 
         /* polynomial coefficients */
         const double g[] = {-2.273, 0.459};

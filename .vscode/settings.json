@@ -52,7 +52,10 @@
         "streambuf": "cpp",
         "typeinfo": "cpp",
         "iomanip": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "__tuple": "cpp",
+        "any": "cpp",
+        "filesystem": "cpp"
     },
     "fortran.fortls.disabled": true
 }

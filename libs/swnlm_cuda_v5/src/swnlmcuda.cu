@@ -39,6 +39,8 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
 
     const size_t inCols = cols + 2 * padding;
 
+    __extern__ shared double *diffArr; // Shared memory space that is sliced and used for each thread locally
+
     bool accepted = false;
     double w = 0;
     double res = 0;
@@ -53,7 +55,7 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
     {
         const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
 
-        double diff[49]; // TODO use template
+        double *diff = diffArr + numNeighbors * (sRow * searchDiam + sCol);
 
         const int neighborDiam = neighborRadius * 2 + 1;
         for (int y = 0; y < neighborDiam; y++)
@@ -169,10 +171,12 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
     denoised.create(1, flatShape, noisyImage.type());
     T *h_out = (T *)denoised.data;
 
+    const size_t sharedMemSize = numNeighbors * threadsPerBlock * sizeof(double);
+
     cudaDeviceSynchronize();
 
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)2 * 1024 * 1024 * 1024); // Set to 2 GB
-    kernel<T><<<blocks, threads>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
+    kernel<T><<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();
     cudaMalloc(&d_out, outSize);

@@ -93,7 +93,12 @@ namespace ShapiroWilk
     {
         const int n = size;
 
-        heapSort(x, size);
+        // bitonicSort(x, size);
+        // thrust::sort(thrust::device, x, x + size);
+        //heapSort(x, size);
+        // bubbleSort(x, size);
+        //insertionSort(x, size);
+        impBitonicSort(x, size);
 
         /* polynomial coefficients */
         const double g[] = {-2.273, 0.459};

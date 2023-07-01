@@ -28,13 +28,13 @@ double computePSNR(const Mat &baseImage, const Mat &changedImage, const double m
     return psnr;
 }
 
-//template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+// template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
 
 template <typename T>
 double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max)
 {
     assert(baseImage.type() == cv::DataType<T>::type);
-    assert(changed.type() == cv::DataType<T>::type);
+    assert(changedImage.type() == cv::DataType<T>::type);
 
     Scalar baseMean, baseStdev;
     Scalar changedMean, changedStdev;
