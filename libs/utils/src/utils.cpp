@@ -28,10 +28,10 @@ double computePSNR(const Mat &baseImage, const Mat &changedImage, const double m
     return psnr;
 }
 
-// template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
 
 template <typename T>
-double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max)
+double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const T max)
 {
     assert(baseImage.type() == cv::DataType<T>::type);
     assert(changedImage.type() == cv::DataType<T>::type);
@@ -73,10 +73,6 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const 
 
     return (luminance * contrast * structure + 1) / 2;
 }
-
-typedef void (*NLMFunction_short)(const cv::Mat &, cv::Mat &, const short, const int, const int);
-typedef void (*NLMFunction_float)(const cv::Mat &, cv::Mat &, const float, const int, const int);
-typedef void (*NLMFunction_double)(const cv::Mat &, cv::Mat &, const double, const int, const int);
 
 template void testNLM(const string filename, const short sigma, const int searchRadius, const int neighborRadius, NLMFunction_short nlmFunction, const bool showImg);
 template void testNLM(const string filename, const float sigma, const int searchRadius, const int neighborRadius, NLMFunction_float nlmFunction, const bool showImg);

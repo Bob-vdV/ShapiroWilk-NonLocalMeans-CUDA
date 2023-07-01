@@ -10,5 +10,6 @@ target_link_libraries(eval
     ${OpenCV_LIBS}
     cnlmLib
     swnlmLib
+    swnlmCudaLib
     utilsLib
 )

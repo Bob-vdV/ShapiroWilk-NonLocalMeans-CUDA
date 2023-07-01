@@ -1,5 +1,6 @@
 #include "cnlm.hpp"
 #include "swnlm.hpp"
+#include "swnlmcuda.cuh"
 #include "utils.hpp"
 
 #include <opencv2/core.hpp>
@@ -16,13 +17,14 @@
 using namespace cv;
 using namespace std;
 
-typedef struct DenoiseAlgorithm
+template <typename Function>
+struct DenoiseAlgorithm
 {
     const string name;
-    NLMFunction denoiser;
+    Function denoiser;
 
-    DenoiseAlgorithm(const string &name, NLMFunction denoiser) : name(name), denoiser(denoiser) {}
-} DenoiseAlgorithm;
+    DenoiseAlgorithm(const string &name, Function denoiser) : name(name), denoiser(denoiser) {}
+};
 
 /**
  * Save a Floating point image with value range [0..1] to png
@@ -31,7 +33,7 @@ void saveImage(const string outputFile, const Mat &image)
 {
     assert(image.type() == CV_64FC1);
     Mat converted;
-    image.convertTo(converted, CV_8UC1, 255.0);
+    image.convertTo(converted, CV_8UC1);
     cv::imwrite(outputFile + ".png", converted);
 }
 
@@ -53,8 +55,10 @@ void writeResult(ofstream &resultsFile, const string &image, const double &sigma
     resultsFile << image << ',' << sigmaStr << ',' << algorithm << ',' << psnrStr << ',' << ssimStr << ',' << execTimeStr << '\n';
 }
 
-void test(const vector<string> &images, const vector<DenoiseAlgorithm> &algorithms, const vector<double> &sigmas, const string &outputDir)
+void test(const vector<string> &images, const vector<DenoiseAlgorithm<NLMFunction_double>> &algorithms, const vector<double> &sigmas, const string &outputDir)
 {
+    const double maxVal = 255;
+
     const int searchRadius = 10;
     const int neighborRadius = 3;
 
@@ -72,7 +76,7 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm> &algorith
             cv::cvtColor(inputImage, inputImage, cv::COLOR_RGB2GRAY);
         }
         assert(inputImage.channels() == 1);
-        inputImage.convertTo(inputImage, CV_64FC1, 1.0 / 255);
+        inputImage.convertTo(inputImage, CV_64FC1);
 
         string imageName = imagePath.substr(imagePath.find_last_of("/") + 1); // Get filename
         imageName = imageName.substr(0, imageName.find_last_of('.'));         // Strip extension
@@ -85,18 +89,17 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm> &algorith
 
         Mat noise = inputImage.clone();
         Mat noisyImage = inputImage.clone();
-        for (const double &sigma255 : sigmas)
+        for (const double &sigma : sigmas)
         {
-            cout << "\tsigma= " << sigma255 << '\n';
+            cout << "\tsigma= " << sigma << '\n';
 
-            const double sigma = sigma255 / 255;
             randn(noise, 0, sigma);
             noisyImage = inputImage + noise;
 
-            saveImage(outputImagePath + "_sigma=" + to_string(sigma255) + "_noisy", noisyImage);
-            double psnr = computePSNR(inputImage, noisyImage);
-            double ssim = computeSSIM(inputImage, noisyImage);
-            writeResult(resultsFile, imageName, sigma255, "noisy", psnr, ssim, NAN);
+            saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_noisy", noisyImage);
+            double psnr = computePSNR(inputImage, noisyImage, maxVal);
+            double ssim = computeSSIM(inputImage, noisyImage, maxVal);
+            writeResult(resultsFile, imageName, sigma, "noisy", psnr, ssim, NAN);
 
             for (const auto &algorithm : algorithms)
             {
@@ -112,10 +115,10 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm> &algorith
 
                 double execTime = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
 
-                saveImage(outputImagePath + "_sigma=" + to_string(sigma255) + "_denoiser=" + algorithm.name, denoisedImage);
-                psnr = computePSNR(inputImage, denoisedImage);
-                ssim = computeSSIM(inputImage, denoisedImage);
-                writeResult(resultsFile, imageName, sigma255, algorithm.name, psnr, ssim, execTime);
+                saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_denoiser=" + algorithm.name, denoisedImage);
+                psnr = computePSNR(inputImage, denoisedImage, maxVal);
+                ssim = computeSSIM(inputImage, denoisedImage, maxVal);
+                writeResult(resultsFile, imageName, sigma, algorithm.name, psnr, ssim, execTime);
 
                 cout << "\tPSNR: " << psnr << "\tSSIM: " << ssim << "\texec Time:" << execTime << '\n';
             }
@@ -138,9 +141,10 @@ int main()
     }
 
     // Add functions to test
-    vector<DenoiseAlgorithm> algorithms = {
+    vector<DenoiseAlgorithm<NLMFunction_double>> algorithms = {
         DenoiseAlgorithm("swnlm", &swnlm),
-        DenoiseAlgorithm("cnlm", &cnlm)};
+        DenoiseAlgorithm("cnlm", &cnlm),
+        DenoiseAlgorithm("swnlm_cuda", &swnlmcuda<double>)};
 
     vector<double> sigmas = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
 

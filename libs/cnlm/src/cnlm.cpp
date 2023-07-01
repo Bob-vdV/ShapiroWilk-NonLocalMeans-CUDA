@@ -11,7 +11,7 @@
 using namespace cv;
 using namespace std;
 
-void makeGaussianKernel(Mat &gaussKernel, const int neighborRadius, const int type)
+void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
 {
     assert(type == CV_64FC1);
 
@@ -21,8 +21,9 @@ void makeGaussianKernel(Mat &gaussKernel, const int neighborRadius, const int ty
     const int stdev = 1;
     const int middle = neighborRadius;
 
-    const int shape[] = {rows, cols};
-    gaussKernel.create(2, shape, type);
+    gaussKernel.resize(rows * cols);
+
+    double *kernel = gaussKernel.data();
 
     double sum = 0;
     for (int row = 0; row < rows; row++)
@@ -32,11 +33,18 @@ void makeGaussianKernel(Mat &gaussKernel, const int neighborRadius, const int ty
             const int rowDist = row - middle;
             const int colDist = col - middle;
 
-            gaussKernel.at<double>(row, col) = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
-            sum += gaussKernel.at<double>(row, col);
+            kernel[row * cols + col] = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
+            sum += kernel[row * cols + col];
+
+            // gaussKernel.at<double>(row, col) = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
+            // sum += gaussKernel.at<double>(row, col);
         }
     }
-    gaussKernel /= sum;
+
+    for (int elem = 0; elem < rows * cols; elem++)
+    {
+        kernel[elem] /= sum;
+    }
 }
 
 void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius)
@@ -54,21 +62,24 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
     Mat paddedImage;
     copyMakeBorder(noisyImage, paddedImage, padding, padding, padding, padding, BORDER_REFLECT);
 
-    Mat gaussKernel;
-    makeGaussianKernel(gaussKernel, neighborRadius, type);
+    const int paddedFlat[] = {(int)paddedImage.total()};
+    paddedImage = paddedImage.reshape(0, 1, paddedFlat);
+    double *in = (double *)paddedImage.data;
 
-    const int shape[] = {rows, cols};
-    denoised.create(2, shape, type);
+    vector<double> gaussKernel;
+    makeGaussianKernel(gaussKernel, neighborRadius);
+    double *kernel = gaussKernel.data();
+
+    const int flatShape[] = {rows * cols};
+    denoised.create(1, flatShape, noisyImage.type());
+    double *denoisedOut = (double *)denoised.data;
+
+    const int inCols = cols + 2 * padding;
+
     for (int row = padding; row < rows + padding; row++)
     {
         for (int col = padding; col < cols + padding; col++)
         {
-            const Range rangesI[] = {
-                Range(row - neighborRadius, row + neighborRadius + 1),
-                Range(col - neighborRadius, col + neighborRadius + 1),
-            };
-            const Mat neighborsI = paddedImage(rangesI);
-
             double sumWeights = 0;
             double val = 0;
 
@@ -76,22 +87,30 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
             {
                 for (int sCol = col - searchRadius; sCol <= col + searchRadius; sCol++)
                 {
-                    const Range rangesJ[] = {
-                        Range(sRow - neighborRadius, sRow + neighborRadius + 1),
-                        Range(sCol - neighborRadius, sCol + neighborRadius + 1)};
-                    const Mat neighborsJ = paddedImage(rangesJ);
-                    Mat diff = neighborsI - neighborsJ;
-                    diff = diff.mul(diff);
+                    double sum = 0;
 
-                    const double sum = cv::sum(diff.mul(gaussKernel))[0];
-                    const double weight = exp(-sum / (h * h));
+                    const int neighborDiam = neighborRadius * 2 + 1;
+                    for (int y = 0; y < neighborDiam; y++)
+                    {
+                        for (int x = 0; x < neighborDiam; x++)
+                        {
+                            const int iNghbrIdx = (2 * padding + cols) * (row + y - neighborRadius) + col + x - neighborRadius;
+                            const int jNghbrIdx = (2 * padding + cols) * (sRow + y - neighborRadius) + sCol + x - neighborRadius;
+                            const int gaussKernelIdx = y * neighborDiam + x;
 
+                            sum += pow(in[iNghbrIdx] - in[jNghbrIdx], 2) * kernel[gaussKernelIdx];
+                        }
+                    }
+                    double weight = exp(-sum / (h * h));
                     sumWeights += weight;
-                    val += weight * paddedImage.at<double>(sRow, sCol);
+                    val += weight * in[sRow * inCols + sCol];
                 }
             }
             val /= sumWeights;
-            denoised.at<double>(row - padding, col - padding) = val;
+            const int denoisedIdx = (row - padding) * cols + col - padding;
+            denoisedOut[denoisedIdx] = val;
         }
+        const int shape[] = {rows, cols};
+        denoised = denoised.reshape(0, 2, shape);
     }
 }
