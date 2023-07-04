@@ -1,5 +1,5 @@
 #include "utils.hpp"
-#include "swnlmcuda.cuh"
+#include "cnlmcuda.cuh"
 
 using namespace std;
 
@@ -11,5 +11,5 @@ int main()
     const int neighborRadius = 3;
     const bool showImg = true;
 
-    testNLM(filename, sigma, searchRadius, neighborRadius, &swnlmcuda<double>, showImg);
+    testNLM(filename, sigma, searchRadius, neighborRadius, &cnlmcuda<double>, showImg);
 }

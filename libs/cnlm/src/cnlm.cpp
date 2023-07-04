@@ -35,9 +35,6 @@ void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
 
             kernel[row * cols + col] = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
             sum += kernel[row * cols + col];
-
-            // gaussKernel.at<double>(row, col) = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
-            // sum += gaussKernel.at<double>(row, col);
         }
     }
 
@@ -54,7 +51,6 @@ void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, cons
 
     const int rows = noisyImage.rows;
     const int cols = noisyImage.cols;
-    const int type = noisyImage.type();
     const double h = 1 * sigma;
 
     // Pad the edges with a reflection of the outer pixels.
