@@ -5,7 +5,7 @@ using namespace std;
 
 int main()
 {
-    const string filename = "/home/bob/Documents/Uni/BachelorThesis/NonLocalMeans/images/mandril.tif";// "../../../images/mandril.tif";
+    const string filename = "/home/bob/Documents/Uni/BachelorThesis/NonLocalMeans/images/test/book_648x432.png"; //"/home/bob/Documents/Uni/BachelorThesis/NonLocalMeans/images/mandril.tif";// "../../../images/mandril.tif";
     const double sigma = 30;
     const int searchRadius = 10;
     const int neighborRadius = 3;

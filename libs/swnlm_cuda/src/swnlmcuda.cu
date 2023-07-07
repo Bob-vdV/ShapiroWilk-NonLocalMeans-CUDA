@@ -20,8 +20,8 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
 
     const size_t threadNum = blockIdx.x * blockDim.x + threadIdx.x;
 
-    const size_t row = threadNum / (rows * searchDiam * searchDiam);
-    const size_t col = (threadNum / (searchDiam * searchDiam)) % rows;
+    const size_t row = threadNum / (cols *searchDiam * searchDiam); 
+    const size_t col = (threadNum / (searchDiam * searchDiam)) % cols;
 
     const size_t sRow = threadNum % (searchDiam * searchDiam) / searchDiam; // 0 <= sRow < 21 for searchRadius =10
     const size_t sCol = threadNum % searchDiam;
