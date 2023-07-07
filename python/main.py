@@ -11,7 +11,6 @@ def gaussianFilter2d(xy, sigma):
     return np.exp((xy[0] * xy[0] + xy[1] * xy[1]) / (-2 * sigma * sigma))
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     maxValue = 5
 

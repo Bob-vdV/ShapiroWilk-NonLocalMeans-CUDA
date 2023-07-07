@@ -9,6 +9,7 @@ target_include_directories( eval PRIVATE ${ROOT_SOURCE_DIR}/images)
 target_link_libraries(eval 
     ${OpenCV_LIBS}
     cnlmLib
+    cnlmCudaLib
     swnlmLib
     swnlmCudaLib
     utilsLib

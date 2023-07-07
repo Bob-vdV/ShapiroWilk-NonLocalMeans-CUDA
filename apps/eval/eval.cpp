@@ -1,4 +1,5 @@
 #include "cnlm.hpp"
+#include "cnlmcuda.cuh"
 #include "swnlm.hpp"
 #include "swnlmcuda.cuh"
 #include "utils.hpp"
@@ -55,7 +56,7 @@ void writeResult(ofstream &resultsFile, const string &image, const double &sigma
     resultsFile << image << ',' << sigmaStr << ',' << algorithm << ',' << psnrStr << ',' << ssimStr << ',' << execTimeStr << '\n';
 }
 
-void test(const vector<string> &images, const vector<DenoiseAlgorithm<NLMFunction_double>> &algorithms, const vector<double> &sigmas, const string &outputDir)
+void test(const vector<string> &images, const vector<DenoiseAlgorithm<NLMFunction_double>> &algorithms, const vector<double> &sigmas, const size_t repetitions, const string &outputDir)
 {
     const double maxVal = 255;
 
@@ -105,22 +106,29 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm<NLMFunctio
             {
                 cout << "\t\tAlgorithm:" << algorithm.name;
 
+                double minTime = INFINITY;
                 Mat denoisedImage;
 
-                chrono::system_clock::time_point begin = chrono::high_resolution_clock::now();
+                for (size_t rep = 0; rep < repetitions; rep++)
+                {
 
-                algorithm.denoiser(noisyImage, denoisedImage, sigma, searchRadius, neighborRadius);
+                    chrono::system_clock::time_point begin = chrono::high_resolution_clock::now();
 
-                chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
+                    algorithm.denoiser(noisyImage, denoisedImage, sigma, searchRadius, neighborRadius);
 
-                double execTime = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
+                    chrono::system_clock::time_point end = chrono::high_resolution_clock::now();
+
+                    double execTime = chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() / 1000.0;
+                    minTime = min(minTime, execTime);
+                    cout << "\t\tRep " << rep << ": " << minTime << " seconds\n";
+                }
 
                 saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_denoiser=" + algorithm.name, denoisedImage);
                 psnr = computePSNR(inputImage, denoisedImage, maxVal);
                 ssim = computeSSIM(inputImage, denoisedImage, maxVal);
-                writeResult(resultsFile, imageName, sigma, algorithm.name, psnr, ssim, execTime);
+                writeResult(resultsFile, imageName, sigma, algorithm.name, psnr, ssim, minTime);
 
-                cout << "\tPSNR: " << psnr << "\tSSIM: " << ssim << "\texec Time:" << execTime << '\n';
+                cout << "\tPSNR: " << psnr << "\tSSIM: " << ssim << "\texec Time:" << minTime << '\n';
             }
         }
     }
@@ -130,8 +138,8 @@ void test(const vector<string> &images, const vector<DenoiseAlgorithm<NLMFunctio
 
 int main()
 {
-    const string imageDir("../../../images/SIPI/misc/");
-    const string outputDir("../../../output/SIPI/misc/");
+    const string imageDir("../../../images/test/");
+    const string outputDir("../../../output/test/");
 
     // Add all images in images dir for testing
     vector<string> images;
@@ -144,9 +152,11 @@ int main()
     vector<DenoiseAlgorithm<NLMFunction_double>> algorithms = {
         DenoiseAlgorithm("swnlm", &swnlm),
         DenoiseAlgorithm("cnlm", &cnlm),
-        DenoiseAlgorithm("swnlm_cuda", &swnlmcuda<double>)};
+        DenoiseAlgorithm("swnlm_cuda", &swnlmcuda<double>),
+        DenoiseAlgorithm("cnlm_cuda", &cnlmcuda<double>)};
 
     vector<double> sigmas = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
+    const size_t repetitions = 5;
 
-    test(images, algorithms, sigmas, outputDir);
+    test(images, algorithms, sigmas, repetitions, outputDir);
 }

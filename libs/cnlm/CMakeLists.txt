@@ -9,5 +9,6 @@ target_sources(cnlmLib
 
 target_include_directories(cnlmLib PUBLIC ${CMAKE_CURRENT_LIST_DIR}/inc)
 target_link_libraries(cnlmLib
+    commonLib
     ${OpenCV_LIBS}
 )

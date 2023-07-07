@@ -1,48 +1,10 @@
 #include "cnlm.hpp"
+#include "common.hpp"
 
 #include <opencv2/core.hpp>
 
-// todo remove
-#include <opencv2/highgui.hpp>
-
-#include <iostream>
-#include <chrono>
-
 using namespace cv;
 using namespace std;
-
-void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
-{
-    assert(type == CV_64FC1);
-
-    const int rows = neighborRadius * 2 + 1;
-    const int cols = neighborRadius * 2 + 1;
-
-    const int stdev = 1;
-    const int middle = neighborRadius;
-
-    gaussKernel.resize(rows * cols);
-
-    double *kernel = gaussKernel.data();
-
-    double sum = 0;
-    for (int row = 0; row < rows; row++)
-    {
-        for (int col = 0; col < cols; col++)
-        {
-            const int rowDist = row - middle;
-            const int colDist = col - middle;
-
-            kernel[row * cols + col] = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
-            sum += kernel[row * cols + col];
-        }
-    }
-
-    for (int elem = 0; elem < rows * cols; elem++)
-    {
-        kernel[elem] /= sum;
-    }
-}
 
 void cnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius)
 {

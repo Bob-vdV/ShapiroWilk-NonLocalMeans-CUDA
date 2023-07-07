@@ -1,3 +1,4 @@
+add_subdirectory(common)
 add_subdirectory(cnlm)
 add_subdirectory(cnlm_cuda)
 add_subdirectory(swnlm)

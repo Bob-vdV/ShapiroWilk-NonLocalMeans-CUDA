@@ -1,5 +1,5 @@
-#ifndef CWNLM_CUDA_CUH
-#define CWNLM_CUDA_CUH
+#ifndef CNLM_CUDA_CUH
+#define CNLM_CUDA_CUH
 
 #include <opencv2/core.hpp>
 

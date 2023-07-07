@@ -1,4 +1,5 @@
 #include "cnlmcuda.cuh"
+#include "common.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
@@ -11,40 +12,6 @@
 
 using namespace std;
 using namespace cv;
-
-// TODO: refactor such that cnlm and cudacnlm share the same function
-void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
-{
-    assert(type == CV_64FC1);
-
-    const int rows = neighborRadius * 2 + 1;
-    const int cols = neighborRadius * 2 + 1;
-
-    const int stdev = 1;
-    const int middle = neighborRadius;
-
-    gaussKernel.resize(rows * cols);
-
-    double *kernel = gaussKernel.data();
-
-    double sum = 0;
-    for (int row = 0; row < rows; row++)
-    {
-        for (int col = 0; col < cols; col++)
-        {
-            const int rowDist = row - middle;
-            const int colDist = col - middle;
-
-            kernel[row * cols + col] = exp(((rowDist * rowDist) + (colDist * colDist)) / (-2.0 * stdev * stdev));
-            sum += kernel[row * cols + col];
-        }
-    }
-
-    for (int elem = 0; elem < rows * cols; elem++)
-    {
-        kernel[elem] /= sum;
-    }
-}
 
 template <typename T>
 __global__ void calculateWeights(const T *in, const double *kernel, double *sumWeights, double *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
@@ -150,11 +117,11 @@ void cnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int sea
     double *d_sumWeights, *d_avg;
     cudaMalloc(&d_sumWeights, rows * cols * sizeof(double));
     assert(d_sumWeights != NULL);
-    cudaMemset(d_sumWeights, 0, rows * cols * sizeof(double));
+    cudaMemsetAsync(d_sumWeights, 0, rows * cols * sizeof(double));
 
     cudaMalloc(&d_avg, rows * cols * sizeof(double));
     assert(d_avg != NULL);
-    cudaMemset(d_avg, 0, rows * cols * sizeof(double));
+    cudaMemsetAsync(d_avg, 0, rows * cols * sizeof(double));
 
     // Allocate output array
     const int flatShape[] = {rows * cols};
@@ -162,8 +129,6 @@ void cnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int sea
     T *h_out = (T *)denoised.data;
 
     cudaDeviceSynchronize();
-
-    cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)2 * 1024 * 1024 * 1024); // Set to 2 GB
     calculateWeights<T><<<blocks, threads>>>(d_in, d_kernel, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();

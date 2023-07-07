@@ -10,6 +10,7 @@ target_sources(cnlmCudaLib
 
 target_include_directories(cnlmCudaLib PUBLIC ${CMAKE_CURRENT_LIST_DIR}/inc)
 target_link_libraries(cnlmCudaLib
+    commonLib
     ${OpenCV_LIBS}
     ${CUDA_LIBRARIES}
 )
