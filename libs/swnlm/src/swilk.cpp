@@ -1,48 +1,74 @@
-/**
- * Shapiro-Wilk test for normality.
+/*
+ * C++ translation of the C source for Shapiro Wilk in the R project.
+ * Source: https://cran.r-project.org/src/base/R-4/R-4.3.1.tar.gz
+ * File: R-4.3.1.tar.gz/R-4.3.1/src/library/stats/src/swilk.c
+ * ------------------------------------------------------------------
  *
- * The following code is ported from Javascript to PHP to JAVA to C++.
- * Original script: https://github.com/rniwa/js-shapiro-wilk/blob/master/shapiro-wilk.js
- * Java code:       https://github.com/elcronos/shapiro-wilk
+ *  R : A Computer Language for Statistical Data Analysis
+ *  Copyright (C) 2000-2016   The R Core Team.
  *
+ *  Based on Applied Statistics algorithms AS181, R94
+ *    (C) Royal Statistical Society 1982, 1995
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, a copy is available at
+ *  https://www.R-project.org/Licenses/
+ */
+
+/* swilk.f -- translated by f2c (version 19980913).
+ * ------- and produced by f2c-clean,v 1.8 --- and hand polished: M.Maechler
  */
 
 #include "swilk.hpp"
-#include "swilkutils.hpp"
-
-#include <algorithm>
 #include <cmath>
-#include <cassert>
-#include <vector>
 
-#include <iostream>
+static double poly(const double *, int, double);
 
-using namespace std;
-
-ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
-                                              a(size + 1) /* 1-based */
+static void
+swilk(double *x, int n, double *w, double *pw, int *ifault)
 {
-    const int n = size;
+    int nn2 = n / 2;
+    double a[nn2 + 1]; /* 1-based */
 
-    assert(n >= 3);
-    assert(n <= 5000);
+    /*	ALGORITHM AS R94 APPL. STATIST. (1995) vol.44, no.4, 547-551.
 
-    const int nn2 = n / 2;
-
-    /*
-        ALGORITHM AS R94 APPL. STATIST. (1995) vol.44, no.4, 547-551.
         Calculates the Shapiro-Wilk W test and its significance level
     */
 
-    const double c1[] = {0.0, 0.221157, -0.147981, -2.07119, 4.434685, -2.706056};
-    const double c2[] = {0.0, 0.042981, -0.293762, -1.752461, 5.682633, -3.582633};
+    double small = 1e-19;
+
+    /* polynomial coefficients */
+    double g[2] = {-2.273, .459};
+    double c1[6] = {0., .221157, -.147981, -2.07119, 4.434685, -2.706056};
+    double c2[6] = {0., .042981, -.293762, -1.752461, 5.682633, -3.582633};
+    double c3[4] = {.544, -.39978, .025054, -6.714e-4};
+    double c4[4] = {1.3822, -.77857, .062767, -.0020322};
+    double c5[4] = {-1.5861, -.31082, -.083751, .0038915};
+    double c6[3] = {-.4803, -.082676, .0030302};
 
     /* Local variables */
-    int i, i1;
+    int i, j, i1;
 
-    double summ2, ssumm2;
-    double a1, a2, an;
-    double fac, an25, rsn;
+    double ssassx, summ2, ssumm2, gamma, range;
+    double a1, a2, an, m, s, sa, xi, sx, xx, y, w1;
+    double fac, asa, an25, ssa, sax, rsn, ssx, xsx;
+
+    *pw = 1.;
+    if (n < 3)
+    {
+        *ifault = 1;
+        return;
+    }
 
     an = (double)n;
 
@@ -52,16 +78,17 @@ ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
     }
     else
     {
-        an25 = an + 0.25;
-        summ2 = 0.0;
+        an25 = an + .25;
+        summ2 = 0.;
         for (i = 1; i <= nn2; i++)
         {
-            a[i] = normalQuantile((i - 0.375) / an25, 0, 1); // p(X <= x),
-            summ2 += a[i] * a[i];
+            a[i] = qnorm((i - 0.375) / an25, 0., 1., 1, 0);
+            double r__1 = a[i];
+            summ2 += r__1 * r__1;
         }
-        summ2 *= 2.0;
+        summ2 *= 2.;
         ssumm2 = sqrt(summ2);
-        rsn = 1.0 / sqrt(an);
+        rsn = 1. / sqrt(an);
         a1 = poly(c1, 6, rsn) - a[1] / ssumm2;
 
         /* Normalize a[] */
@@ -69,76 +96,58 @@ ShapiroWilk::ShapiroWilk(const size_t size) : size(size),
         {
             i1 = 3;
             a2 = -a[2] / ssumm2 + poly(c2, 6, rsn);
-            fac = sqrt((summ2 - 2.0 * (a[1] * a[1]) - 2.0 * (a[2] * a[2])) / (1.0 - 2.0 * (a1 * a1) - 2.0 * (a2 * a2)));
+            fac = sqrt((summ2 - 2. * (a[1] * a[1]) - 2. * (a[2] * a[2])) / (1. - 2. * (a1 * a1) - 2. * (a2 * a2)));
             a[2] = a2;
         }
         else
         {
             i1 = 2;
-            fac = sqrt((summ2 - 2.0 * (a[1] * a[1])) / (1.0 - 2.0 * (a1 * a1)));
+            fac = sqrt((summ2 - 2. * (a[1] * a[1])) /
+                       (1. - 2. * (a1 * a1)));
         }
         a[1] = a1;
         for (i = i1; i <= nn2; i++)
-        {
             a[i] /= -fac;
-        }
     }
-}
 
-/**
- * Calculates P-value for ShapiroWilk Test
- *
- * @param x
- * @return
- */
-void ShapiroWilk::test(double *x, double &w, double &pw) const
-{
-    const int n = size;
+    /*	Check for zero range */
 
-    sort(x, x + size);
+    range = x[n - 1] - x[0];
+    if (range < small)
+    {
+        *ifault = 6;
+        return;
+    }
 
-    pw = 1.0;
+    /*	Check for correct sort order on range - scaled X */
 
-    /* polynomial coefficients */
-    const double g[] = {-2.273, 0.459};
-    const double c3[] = {0.544, -0.39978, 0.025054, -6.714e-4};
-    const double c4[] = {1.3822, -0.77857, 0.062767, -0.0020322};
-    const double c5[] = {-1.5861, -0.31082, -0.083751, 0.0038915};
-    const double c6[] = {-0.4803, -0.082676, 0.0030302};
-
-    /* Local variables */
-    int i, j;
-
-    double ssassx, gamma;
-    double m, s, sa, xi, sx, xx, y, w1;
-    double asa, ssa, sax, ssx, xsx;
-
-    const double an = n;
-
-    /* Check for zero range */
-
-    const double range = x[n - 1] - x[0];
-    assert(range > 0);
-
-    /* Check for correct sort order on range - scaled X */
-
+    /* *ifault = 7; <-- a no-op, since it is changed below, in ANY CASE! */
+    *ifault = 0;
     xx = x[0] / range;
     sx = xx;
     sa = -a[1];
     for (i = 1, j = n - 1; i < n; j--)
     {
         xi = x[i] / range;
-
+        if (xx - xi > small)
+        {
+            /* Fortran had:	 print *, "ANYTHING"
+             * but do NOT; it *does* happen with sorted x (on Intel GNU/linux 32bit):
+             *  shapiro.test(c(-1.7, -1,-1,-.73,-.61,-.5,-.24, .45,.62,.81,1))
+             */
+            *ifault = 7;
+        }
         sx += xi;
         i++;
         if (i != j)
-        {
             sa += sign(i - j) * a[min(i, j)];
-        }
         xx = xi;
     }
+    if (n > 5000)
+        *ifault = 2;
 
-    /* Calculate W statistic as squared correlation        between data and coefficients */
+    /*	Calculate W statistic as squared correlation
+        between data and coefficients */
 
     sa /= n;
     sx /= n;
@@ -146,39 +155,31 @@ void ShapiroWilk::test(double *x, double &w, double &pw) const
     for (i = 0, j = n - 1; i < n; i++, j--)
     {
         if (i != j)
-        {
             asa = sign(i - j) * a[1 + min(i, j)] - sa;
-        }
         else
-        {
             asa = -sa;
-        }
         xsx = x[i] / range - sx;
         ssa += asa * asa;
         ssx += xsx * xsx;
         sax += asa * xsx;
     }
 
-    /*
-     * W1 equals (1-W) calculated to avoid excessive rounding error
-     * for W very near 1 (a potential problem in very large samples)
-     */
+    /*	W1 equals (1-W) calculated to avoid excessive rounding error
+        for W very near 1 (a potential problem in very large samples) */
 
     ssassx = sqrt(ssa * ssx);
     w1 = (ssassx - sax) * (ssassx + sax) / (ssa * ssx);
-    w = 1.0 - w1;
-    /* Calculate significance level for W */
+    *w = 1. - w1;
+
+    /*	Calculate significance level for W */
 
     if (n == 3)
-    {                                         /* exact P value : */
-        const double pi6 = 1.90985931710274;  /* = 6/pi */
-        const double stqr = 1.04719755119660; /* = asin(sqrt(3/4)) */
-        pw = pi6 * (asin(sqrt(w)) - stqr);
-        if (pw < 0.)
-        {
-            pw = 0;
-        }
-        // return w;
+    {                                  /* exact P value : */
+        double pi6 = 1.90985931710274, /* = 6/pi */
+            stqr = 1.04719755119660;   /* = asin(sqrt(3/4)) */
+        *pw = pi6 * (asin(sqrt(*w)) - stqr);
+        if (*pw < 0.)
+            *pw = 0.;
         return;
     }
     y = log(w1);
@@ -188,8 +189,7 @@ void ShapiroWilk::test(double *x, double &w, double &pw) const
         gamma = poly(g, 2, an);
         if (y >= gamma)
         {
-            pw = 1e-99; /* an "obvious" value, was 'small' which was 1e-19f */
-            // return w;
+            *pw = 1e-99; /* an "obvious" value, was 'small' which was 1e-19f */
             return;
         }
         y = -log(gamma - y);
@@ -201,10 +201,29 @@ void ShapiroWilk::test(double *x, double &w, double &pw) const
         m = poly(c5, 4, xx);
         s = exp(poly(c6, 3, xx));
     }
+    /*DBG printf("c(w1=%g, w=%g, y=%g, m=%g, s=%g)\n",w1,*w,y,m,s); */
 
-    // Oops, we don't have pnorm
-    // pw = pnorm(y, m, s, 0/* upper tail */, 0);
-    const double z = (y - m) / s;
-    pw = gaussCdf(z);
+    *pw = pnorm(y, m, s, 0 /* upper tail */, 0);
+
     return;
-}
+} /* swilk */
+
+static double poly(const double *cc, int nord, double x)
+{
+    /* Algorithm AS 181.2	Appl. Statist.	(1982) Vol. 31, No. 2
+
+        Calculates the algebraic polynomial of order nord-1 with
+        array of coefficients cc.  Zero order coefficient is cc(1) = cc[0]
+    */
+    double p, ret_val;
+
+    ret_val = cc[0];
+    if (nord > 1)
+    {
+        p = x * cc[nord - 1];
+        for (int j = nord - 2; j > 0; j--)
+            p = (p + cc[j]) * x;
+        ret_val += p;
+    }
+    return ret_val;
+} /* poly */
