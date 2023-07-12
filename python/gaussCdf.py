@@ -41,8 +41,9 @@ def gaussCdf(z):
     
 
 def main():
-    start = -1.7
-    end = -1.6
+    start = -3
+    end = 3
+    alpha = 0.05
 
     x = np.linspace(start, end, 10000000, dtype=np.longdouble)
 
@@ -50,13 +51,24 @@ def main():
 
     y = test(x)
 
-    plt.plot(x, y)
-    plt.hlines(0.05, start, end, color="orange")
-
-    nearest = x[find_nearest_idx(y, 0.05)]
+    nearest = x[find_nearest_idx(y, alpha)]
     print(nearest)
 
+    plt.title("Threshold value for Shapiro-Wilk test")
+    plt.xlabel("w")
+    plt.ylabel("t")
+
+    plt.plot(x, y,)
+    plt.hlines(alpha, start, end, colors="orange")
+    plt.plot(nearest, alpha, marker='o', color="black")
+
+    offset = 0.03
+    plt.text(end, alpha + offset, "α = 0.05", color="C1", ha="right")
+
+    plt.text(nearest, alpha + offset, f"({nearest:.2f}, {alpha})", color="black", ha="right")
+
     plt.savefig("pw.png")
+    plt.savefig("pw.svg")
     plt.show()
 
 
