@@ -1,14 +1,29 @@
-#ifndef SWNLM_SORT_CUH
-#define SWNLM_SORT_CUH
+#ifndef SWILK_SORT_CUH
+#define SWWILK_SORT_CUH
 
 // Heap Sort in C
 // Source code taken from: https://www.geeksforgeeks.org/heap-sort/
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <math.h>
 
-namespace
+namespace SwilkSort
 {
+    /*
+    template <typename T>
+    __host__ __device__ T min(T a, T b){
+        return (a < b) ? a : b;
+    }
+
+    template <typename T>
+    __host__ __device__ T max(T a, T b){
+        return (a > b) ? a : b;
+    }*/
+
+
     // Function to swap the position of two elements
 
-    __device__ void swap(double *a, double *b)
+    __host__ __device__ void swap(double *a, double *b)
     {
 
         double temp = *a;
@@ -19,7 +34,7 @@ namespace
     // To heapify a subtree rooted with node i
     // which is an index in arr[].
     // n is size of heap
-    __device__ void heapify(double arr[], int N, int i)
+    __host__ __device__ void heapify(double arr[], int N, int i)
     {
         // Find largest among root,
         // left child and right child
@@ -56,7 +71,7 @@ namespace
     }
 
     // Main function to do heap sort
-    __device__ void heapSort(double arr[], int N)
+    __host__ __device__ void heapSort(double arr[], int N)
     {
 
         // Build max heap
@@ -89,27 +104,29 @@ namespace
         }
     }
 
-// Function to sort an array using
-// insertion sort
-__device__  void insertionSort(double arr[], int n)
-{
-    double key;
-    int i, j;
-    for (i = 1; i < n; i++) {
-        key = arr[i];
-        j = i - 1;
- 
-        // Move elements of arr[0..i-1],
-        // that are greater than key,
-        // to one position ahead of their
-        // current position
-        while (j >= 0 && arr[j] > key) {
-            arr[j + 1] = arr[j];
-            j = j - 1;
+    // Function to sort an array using
+    // insertion sort
+    __device__ void insertionSort(double arr[], int n)
+    {
+        double key;
+        int i, j;
+        for (i = 1; i < n; i++)
+        {
+            key = arr[i];
+            j = i - 1;
+
+            // Move elements of arr[0..i-1],
+            // that are greater than key,
+            // to one position ahead of their
+            // current position
+            while (j >= 0 && arr[j] > key)
+            {
+                arr[j + 1] = arr[j];
+                j = j - 1;
+            }
+            arr[j + 1] = key;
         }
-        arr[j + 1] = key;
     }
-}
 
 }
 #endif

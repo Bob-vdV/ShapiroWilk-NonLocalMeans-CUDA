@@ -14,13 +14,13 @@ using namespace std;
 using namespace cv;
 
 template <typename T>
-__global__ void kernel(const T *in, const double *a, double *sumWeights, double *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
+__global__ void kernel(const T *in, const double *a, double *sumWeights, double *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma, double alpha)
 {
     const size_t searchDiam = 2 * searchRadius + 1;
 
     const size_t threadNum = blockIdx.x * blockDim.x + threadIdx.x;
 
-    const size_t row = threadNum / (cols *searchDiam * searchDiam); 
+    const size_t row = threadNum / (cols * searchDiam * searchDiam);
     const size_t col = (threadNum / (searchDiam * searchDiam)) % cols;
 
     const size_t sRow = threadNum % (searchDiam * searchDiam) / searchDiam; // 0 <= sRow < 21 for searchRadius =10
@@ -67,8 +67,8 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
             }
         }
 
-        bool hypothesis;
-        ShapiroWilk::test(diff, a, numNeighbors, w, hypothesis);
+        double pw;
+        ShapiroWilk::test(diff, a, numNeighbors, w, pw);
 
         double mean = 0;
         for (int i = 0; i < numNeighbors; i++)
@@ -89,7 +89,7 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
 
         if (stderror > mean && mean > -stderror &&
             (1 + stderror > stddev && stddev > 1 - stderror) &&
-            hypothesis) // Fail to reject Null hypothesis that it is normally distributed
+            pw > alpha) // Fail to reject Null hypothesis that it is normally distributed
         {
             res = w * in[paddedSRow * inCols + paddedSCol];
             accepted = true;
@@ -120,6 +120,8 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
 {
     assert(noisyImage.type() == cv::DataType<T>::type);
     assert(noisyImage.dims == 2);
+
+    double alpha = 0.05;
 
     const int rows = noisyImage.rows;
     const int cols = noisyImage.cols;
@@ -174,7 +176,7 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
     const size_t sharedMemSize = numNeighbors * threadsPerBlock * sizeof(double);
     cudaDeviceSynchronize();
 
-    kernel<T><<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
+    kernel<T><<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma, alpha);
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();
     cudaMalloc(&d_out, outSize);

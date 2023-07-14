@@ -1,5 +1,5 @@
 #include "swnlm.hpp"
-#include "swilk.hpp"
+#include "swilk.cuh"
 
 #include <opencv2/core.hpp>
 
@@ -26,7 +26,10 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
     double *in = (double *)paddedImage.data;
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
-    ShapiroWilk swilk(numNeighbors);
+
+    vector<double> a_vec(numNeighbors / 2 + 1);
+    double *a = a_vec.data();
+    ShapiroWilk::setup(a, numNeighbors);
 
     const int flatShape[] = {rows * cols};
     denoised.create(1, flatShape, noisyImage.type());
@@ -64,7 +67,7 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
                     }
 
                     double w, pw;
-                    swilk.test(diff, w, pw);
+                    ShapiroWilk::test(diff, a, numNeighbors, w, pw);
 
                     // cout << w << '\t' << pw << '\n';
                     double mean = 0;
