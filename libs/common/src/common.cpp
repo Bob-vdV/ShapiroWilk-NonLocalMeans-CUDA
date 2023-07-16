@@ -4,7 +4,11 @@
 
 using namespace std;
 
-void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
+template void makeGaussianKernel(vector<float> &gaussKernel, const int neighborRadius);
+template void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius);
+
+template <typename F>
+void makeGaussianKernel(vector<F> &gaussKernel, const int neighborRadius)
 {
     const int rows = neighborRadius * 2 + 1;
     const int cols = neighborRadius * 2 + 1;
@@ -14,9 +18,9 @@ void makeGaussianKernel(vector<double> &gaussKernel, const int neighborRadius)
 
     gaussKernel.resize(rows * cols);
 
-    double *kernel = gaussKernel.data();
+    F *kernel = gaussKernel.data();
 
-    double sum = 0;
+    F sum = 0;
     for (int row = 0; row < rows; row++)
     {
         for (int col = 0; col < cols; col++)

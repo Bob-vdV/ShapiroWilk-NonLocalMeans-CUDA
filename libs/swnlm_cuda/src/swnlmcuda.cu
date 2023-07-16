@@ -13,8 +13,8 @@
 using namespace std;
 using namespace cv;
 
-template <typename T>
-__global__ void kernel(const T *in, const double *a, double *sumWeights, double *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma, double alpha)
+template <typename T, typename SWType>
+__global__ void kernel(const T *in, const SWType *a, SWType *sumWeights, SWType *avg, int rows, int cols, int searchRadius, int neighborRadius, SWType sigma, SWType threshold)
 {
     const size_t searchDiam = 2 * searchRadius + 1;
 
@@ -35,11 +35,13 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
 
     const size_t inCols = cols + 2 * padding;
 
-    extern __shared__ double diffArr[]; // Shared memory space that is sliced and used for each thread locally
+    // Shared memory space that is sliced and used for each thread locally
+    extern __shared__ void *smem[];
+    SWType *diffArr = reinterpret_cast<SWType *>(smem);
 
     bool accepted = false;
-    double w = 0;
-    double res = 0;
+    SWType w = 0;
+    SWType res = 0;
 
     if (paddedSRow == paddedRow && paddedSCol == paddedCol)
     { // center pixel is skipped
@@ -51,48 +53,61 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
     {
         const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
 
-        double *diff = diffArr + numNeighbors * (threadIdx.x);
+        SWType *diff = diffArr + numNeighbors * (threadIdx.x);
+
+        int iNghbrIdx, jNghbrIdx;
+        int diffIdx = 0;
+        const SWType divisor = sqrt(2.0) * sigma;
 
         const int neighborDiam = neighborRadius * 2 + 1;
         for (int y = 0; y < neighborDiam; y++)
         {
+            iNghbrIdx = inCols * (paddedRow + y - neighborRadius) + paddedCol - neighborRadius;
+            jNghbrIdx = inCols * (paddedSRow + y - neighborRadius) + paddedSCol - neighborRadius;
+
             for (int x = 0; x < neighborDiam; x++)
             {
-                const int diffIdx = y * neighborDiam + x;
+                // const int diffIdx = y * neighborDiam + x;
 
-                const int iNghbrIdx = inCols * (paddedRow + y - neighborRadius) + paddedCol + x - neighborRadius;
-                const int jNghbrIdx = inCols * (paddedSRow + y - neighborRadius) + paddedSCol + x - neighborRadius;
+                // const int iNghbrIdx = inCols * (paddedRow + y - neighborRadius) + paddedCol + x - neighborRadius;
+                // const int jNghbrIdx = inCols * (paddedSRow + y - neighborRadius) + paddedSCol + x - neighborRadius;
 
-                diff[diffIdx] = (in[iNghbrIdx] - in[jNghbrIdx]) / (sqrt(2.0) * sigma);
+                diff[diffIdx] = (in[iNghbrIdx] - in[jNghbrIdx]) / divisor;
+
+                diffIdx++;
+                iNghbrIdx++;
+                jNghbrIdx++;
             }
         }
 
-        double pw;
-        ShapiroWilk::test(diff, a, numNeighbors, w, pw);
+        ShapiroWilk::test(diff, a, numNeighbors, w);
 
-        double mean = 0;
-        for (int i = 0; i < numNeighbors; i++)
+        if (w > threshold)
+        // Fail to reject Null hypothesis that it is normally distributed
         {
-            mean += diff[i];
-        }
-        mean /= numNeighbors;
+            SWType mean = 0;
+            for (int i = 0; i < numNeighbors; i++)
+            {
+                mean += diff[i];
+            }
+            mean /= numNeighbors;
 
-        double stddev = 0;
-        for (int i = 0; i < numNeighbors; i++)
-        {
-            stddev += (diff[i] - mean) * (diff[i] - mean);
-        }
-        stddev /= numNeighbors;
-        stddev = sqrt(stddev);
+            SWType stddev = 0;
+            for (int i = 0; i < numNeighbors; i++)
+            {
+                stddev += (diff[i] - mean) * (diff[i] - mean);
+            }
+            stddev /= numNeighbors;
+            stddev = sqrt(stddev);
 
-        const double stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
+            const SWType stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
 
-        if (stderror > mean && mean > -stderror &&
-            (1 + stderror > stddev && stddev > 1 - stderror) &&
-            pw > alpha) // Fail to reject Null hypothesis that it is normally distributed
-        {
-            res = w * in[paddedSRow * inCols + paddedSCol];
-            accepted = true;
+            if (stderror > mean && mean > -stderror &&
+                (1 + stderror > stddev && stddev > 1 - stderror))
+            {
+                res = w * in[paddedSRow * inCols + paddedSCol];
+                accepted = true;
+            }
         }
     }
     if (accepted)
@@ -102,26 +117,32 @@ __global__ void kernel(const T *in, const double *a, double *sumWeights, double 
     }
 }
 
-//
-template <typename T>
-__global__ void denoiseStep(double *sumWeights, double *avg, T *out, const int rows, const int cols)
+template <typename T, typename SWType>
+__global__ void denoiseStep(SWType *sumWeights, SWType *avg, T *out, const int rows, const int cols)
 {
     const int threadNum = blockIdx.x * blockDim.x + threadIdx.x;
 
-    out[threadNum] = avg[threadNum] / sumWeights[threadNum];
+    out[threadNum] = round(avg[threadNum] / sumWeights[threadNum]);
 }
 
-template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const short sigma, const int searchRadius, const int neighborRadius);
+template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const uint8_t sigma, const int searchRadius, const int neighborRadius);
+template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const int32_t sigma, const int searchRadius, const int neighborRadius);
 template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const float sigma, const int searchRadius, const int neighborRadius);
 template void swnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
 
 template <typename T>
 void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius)
 {
+    /**
+     * Determine the float precision for shapiro wilk test based on the size of T
+     */
+    constexpr bool useFloat = sizeof(T) <= sizeof(float);
+    using SWType = typename std::conditional<useFloat, float, double>::type; 
+
     assert(noisyImage.type() == cv::DataType<T>::type);
     assert(noisyImage.dims == 2);
 
-    double alpha = 0.05;
+    SWType alpha = 0.05;
 
     const int rows = noisyImage.rows;
     const int cols = noisyImage.cols;
@@ -136,47 +157,50 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
     T *h_in = (T *)paddedImage.data;
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
-    vector<double> h_a(numNeighbors + 1);
+    vector<SWType> h_a(numNeighbors + 1);
     ShapiroWilk::setup(h_a.data(), numNeighbors);
+
+    const SWType threshold = ShapiroWilk::findThreshold(alpha, numNeighbors);
 
     const int searchDiam = 2 * searchRadius + 1;
 
     const int totalThreads = rows * cols * searchDiam * searchDiam;
-    const int threadsPerBlock = 32; // Arbitrarily chosen, needs more experimentation.
+    const int threadsPerBlock = 32; // 32 gives fastest results when tested
     const int numBlocks = ceil((double)totalThreads / threadsPerBlock);
 
     dim3 blocks(numBlocks);
     dim3 threads(threadsPerBlock);
 
     T *d_in, *d_out;
-    double *d_a;
+    SWType *d_a;
     const size_t inSize = paddedImage.total() * paddedImage.channels() * paddedImage.elemSize();
     cudaMalloc(&d_in, inSize);
     assert(d_in != NULL);
     cudaMemcpyAsync(d_in, h_in, inSize, cudaMemcpyHostToDevice);
 
-    cudaMalloc(&d_a, numNeighbors * sizeof(double));
+    cudaMalloc(&d_a, numNeighbors * sizeof(SWType));
     assert(d_a != NULL);
-    cudaMemcpyAsync(d_a, h_a.data(), numNeighbors * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_a, h_a.data(), numNeighbors * sizeof(SWType), cudaMemcpyHostToDevice);
 
-    double *d_sumWeights, *d_avg;
-    cudaMalloc(&d_sumWeights, rows * cols * sizeof(double));
+    SWType *d_sumWeights, *d_avg;
+    cudaMalloc(&d_sumWeights, rows * cols * sizeof(SWType));
     assert(d_sumWeights != NULL);
-    cudaMemset(d_sumWeights, 0, rows * cols * sizeof(double));
+    cudaMemset(d_sumWeights, 0, rows * cols * sizeof(SWType));
 
-    cudaMalloc(&d_avg, rows * cols * sizeof(double));
+    cudaMalloc(&d_avg, rows * cols * sizeof(SWType));
     assert(d_avg != NULL);
-    cudaMemset(d_avg, 0, rows * cols * sizeof(double));
+    cudaMemset(d_avg, 0, rows * cols * sizeof(SWType));
 
     // Allocate output array
     const int flatShape[] = {rows * cols};
     denoised.create(1, flatShape, noisyImage.type());
     T *h_out = (T *)denoised.data;
 
-    const size_t sharedMemSize = numNeighbors * threadsPerBlock * sizeof(double);
+    const size_t sharedMemSize = numNeighbors * threadsPerBlock * sizeof(SWType);
+    cudaFuncSetCacheConfig(&kernel<T, SWType>, cudaFuncCachePreferShared);
     cudaDeviceSynchronize();
 
-    kernel<T><<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma, alpha);
+    kernel<T, SWType><<<blocks, threads, sharedMemSize>>>(d_in, d_a, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma, threshold);
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();
     cudaMalloc(&d_out, outSize);
@@ -187,7 +211,7 @@ void swnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int se
 
     cudaDeviceSynchronize();
 
-    denoiseStep<T><<<denoiseBlocks, denoiseThreads>>>(d_sumWeights, d_avg, d_out, rows, cols);
+    denoiseStep<T, SWType><<<denoiseBlocks, denoiseThreads>>>(d_sumWeights, d_avg, d_out, rows, cols);
 
     cudaDeviceSynchronize();
 

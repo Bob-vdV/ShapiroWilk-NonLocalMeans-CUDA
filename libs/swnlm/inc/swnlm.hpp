@@ -3,6 +3,7 @@
 
 #include <opencv2/core.hpp>
 
-void swnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
+template <typename T>
+void swnlm(const cv::Mat &noisyImage, cv::Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius);
 
 #endif

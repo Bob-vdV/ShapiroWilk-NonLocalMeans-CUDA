@@ -24,18 +24,27 @@
  *  http://www.r-project.org/Licenses/
  */
 
-#ifndef SWNLM_SWILK_HPP
-#define SWNLM_SWILK_HPP
-
 #include "swilk.cuh"
 #include "sort.cuh"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cuda_runtime.h>
 #include <iostream>
 #include <vector>
+
+using namespace SwilkSort;
+
+template void ShapiroWilk::setup(float *a, const int size);
+template void ShapiroWilk::setup(double *a, const int size);
+
+template __host__ __device__ void ShapiroWilk::test(float *x, const float *a, const int size, float &w);
+template __host__ __device__ void ShapiroWilk::test(double *x, const double *a, const int size, double &w);
+
+template float ShapiroWilk::findThreshold(const float alpha, const int n);
+template double ShapiroWilk::findThreshold(const double alpha, const int n);
 
 // The inverse of cdf.
 __host__ __device__ double normalQuantile(double p, double mu, double sigma)
@@ -105,25 +114,25 @@ __host__ __device__ double normalQuantile(double p, double mu, double sigma)
  *  http://www.r-project.org/Licenses/
  */
 
-__host__ __device__ int sign(double x)
+template <typename T>
+__host__ __device__ int sign(const T x)
 {
     if (x == 0)
         return 0;
     return x > 0 ? 1 : -1;
 }
 
-__host__ __device__ double poly(double *cc, int nord, double x)
+template <typename T>
+__host__ __device__ constexpr T poly(const T cc[], const int nord, const T x)
 {
     /* Algorithm AS 181.2	Appl. Statist.	(1982) Vol. 31, No. 2
     Calculates the algebraic polynomial of order nord-1 with array of coefficients cc.
     Zero order coefficient is cc(1) = cc[0] */
-    double p;
-    double ret_val;
 
-    ret_val = cc[0];
+    T ret_val = cc[0];
     if (nord > 1)
     {
-        p = x * cc[nord - 1];
+        T p = x * cc[nord - 1];
         for (int j = nord - 2; j > 0; j--)
             p = (p + cc[j]) * x;
         ret_val += p;
@@ -131,7 +140,8 @@ __host__ __device__ double poly(double *cc, int nord, double x)
     return ret_val;
 }
 
-__host__ __device__ double _alnorm(double x, int upper)
+template <typename T>
+__host__ __device__ T _alnorm(T x, int upper)
 {
     /*
      * Ported from the Scipy implementation of Shapiro Wilk algorithm:
@@ -153,13 +163,13 @@ __host__ __device__ double _alnorm(double x, int upper)
 
     The change is shown below as a commented utzero definition
     """*/
-    double A1, A2, A3, A4, A5, A6, A7;
-    double B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12;
-    double ltone = 7.;
+    T A1, A2, A3, A4, A5, A6, A7;
+    T B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12;
+    T ltone = 7.;
     // # double utzero = 18.66;
-    double utzero = 38.;
-    double con = 1.28;
-    double y, z, temp;
+    T utzero = 38.;
+    T con = 1.28;
+    T y, z, temp;
 
     A1 = 0.398942280444;
     A2 = 0.399903438504;
@@ -221,19 +231,20 @@ __host__ __device__ double _alnorm(double x, int upper)
  * Calculate coefficients a for given size
  * Note: a must have allocated (size / 2) + 1 elements
  */
-void ShapiroWilk::setup(double *a, const int size)
+template <typename T>
+void ShapiroWilk::setup(T *a, const int size)
 {
-    int n = size;
+    const int n = size;
 
     int nn2 = floor(n / 2);
 
-    double c1[] = {0, 0.221157, -0.147981, -2.07119, 4.434685, -2.706056};
-    double c2[] = {0, 0.042981, -0.293762, -1.752461, 5.682633, -3.582633};
+    T c1[] = {0, 0.221157, -0.147981, -2.07119, 4.434685, -2.706056};
+    T c2[] = {0, 0.042981, -0.293762, -1.752461, 5.682633, -3.582633};
 
-    double an, an25, summ2, ssumm2, rsn, a1, a2, fac;
+    T an25, summ2, ssumm2, rsn, a1, a2, fac;
     int i, i1;
 
-    an = n;
+    const T an = n;
 
     if (n == 3)
         a[1] = 0.70710678; /* = sqrt(1/2) */
@@ -271,17 +282,19 @@ void ShapiroWilk::setup(double *a, const int size)
     }
 };
 
-__host__ __device__ void ShapiroWilk::test(double *x, const double *a, const int size, double &w, double &pw)
+template <typename T>
+__host__ __device__ void ShapiroWilk::test(T *x, const T *a, const int size, T &w)
 {
 #if defined(__CUDA_ARCH__)
     // Device code
-    SwilkSort::heapSort(x, size);
+    heapSort(x, size);
 #else
     // Host code
     std::sort(x, x + size);
+
 #endif
 
-    int n = size;
+    const int n = size;
 
     if (n < 3)
     {
@@ -293,28 +306,18 @@ __host__ __device__ void ShapiroWilk::test(double *x, const double *a, const int
 
         Calculates the Shapiro-Wilk W test and its significance level
     */
-    double small = 1e-19;
-
-    /* polynomial coefficients */
-    double g[] = {-2.273, 0.459};
-    double c3[] = {0.544, -0.39978, 0.025054, -6.714e-4};
-    double c4[] = {1.3822, -0.77857, 0.062767, -0.0020322};
-    double c5[] = {-1.5861, -0.31082, -0.083751, 0.0038915};
-    double c6[] = {-0.4803, -0.082676, 0.0030302};
+    const T small = 1e-19;
 
     /* Local variables */
     int i, j;
 
-    double ssassx, gamma, range;
-    double an, m, s, sa, xi, sx, xx, y, w1;
-    double asa, ssa, sax, ssx, xsx;
-
-    pw = 1;
-    an = n;
+    T ssassx;
+    T sa, xi, sx, xx, w1;
+    T asa, ssa, sax, ssx, xsx;
 
     /*	Check for zero range */
 
-    range = x[n - 1] - x[0];
+    const T range = x[n - 1] - x[0];
     if (range < small)
     {
         printf("Range is too small!\n");
@@ -322,7 +325,6 @@ __host__ __device__ void ShapiroWilk::test(double *x, const double *a, const int
     }
 
     /*	Check for correct sort order on range - scaled X */
-
     xx = x[0] / range;
     sx = xx;
     sa = -a[1];
@@ -374,41 +376,110 @@ __host__ __device__ void ShapiroWilk::test(double *x, const double *a, const int
     ssassx = sqrt(ssa * ssx);
     w1 = (ssassx - sax) * (ssassx + sax) / (ssa * ssx);
     w = 1 - w1;
-
-    /*	Calculate significance level for W */
-
-    if (n == 3)
-    {                                   /* exact P value : */
-        double pi6 = 1.90985931710274;  /* = 6/pi */
-        double stqr = 1.04719755119660; /* = asin(sqrt(3/4)) */
-        pw = pi6 * (asin(sqrt(w)) - stqr);
-        if (pw < 0.)
-            pw = 0;
-        return;
-    }
-    y = log(w1);
-    xx = log(an);
-    if (n <= 11)
-    {
-        gamma = poly(g, 2, an);
-        if (y >= gamma)
-        {
-            pw = 1e-99; /* an "obvious" value, was 'small' which was 1e-19f */
-            return;
-        }
-        y = -log(gamma - y);
-        m = poly(c3, 4, an);
-        s = exp(poly(c4, 4, an));
-    }
-    else
-    { /* n >= 12 */
-        m = poly(c5, 4, xx);
-        s = exp(poly(c6, 3, xx));
-    }
-
-    pw = _alnorm((y - m) / s, true);
-
     return;
 }
 
-#endif
+template <typename T>
+T calcPw(const T w, const int n)
+{
+    T pw;
+    T m, s, gamma;
+    const T w1 = -w + 1;
+
+    /* polynomial coefficients */
+    const T g[] = {-2.273, 0.459};
+    const T c3[] = {0.544, -0.39978, 0.025054, -6.714e-4};
+    const T c4[] = {1.3822, -0.77857, 0.062767, -0.0020322};
+    const T c5[] = {-1.5861, -0.31082, -0.083751, 0.0038915};
+    const T c6[] = {-0.4803, -0.082676, 0.0030302};
+
+    /*	Calculate significance level for W */
+    if (n == 3)
+    {                                    /* exact P value : */
+        const T pi6 = 1.90985931710274;  /* = 6/pi */
+        const T stqr = 1.04719755119660; /* = asin(sqrt(3/4)) */
+        pw = pi6 * (asin(sqrt(w)) - stqr);
+        if (pw < 0.)
+            pw = 0;
+        return pw;
+    }
+    T y = log(w1);
+    const T logn = log((T)n);
+    if (n <= 11)
+    {
+        gamma = poly(g, 2, (T) n);
+        if (y >= gamma)
+        {
+            pw = 0; 
+            return pw;
+        }
+        y = -log(gamma - y);
+        m = poly(c3, 4, (T) n);
+        s = exp(poly(c4, 4, (T) n));
+    }
+    else
+    { /* n >= 12 */
+        m = poly(c5, 4, logn);
+        s = exp(poly(c6, 3, logn));
+    }
+
+    pw = _alnorm((y - m) / s, true);
+    return pw;
+}
+
+/**
+ * Find the threshold of w for not rejecting the null hypothesis
+ */
+template <typename T>
+T ShapiroWilk::findThreshold(const T alpha, const int n)
+{
+    T start = 0;
+    T end = 1 - 1e-16;
+
+    const T precision = pow(10, (int)-std::numeric_limits<T>::digits10);
+
+    // const double precision = 1e-15;
+
+    while (abs(start - end) > precision)
+    {
+        const T searchRange = end - start;
+
+        const T first = calcPw(start, n);
+        const T last = calcPw(end, n);
+
+        if (abs(first - alpha) < abs(last - alpha))
+        {
+            // Minimum is left of start
+            if ((first - alpha) > 0)
+            {
+                start = start - searchRange;
+                end = end - searchRange;
+                continue;
+            }
+
+            // Minimum is right of start
+            else
+            {
+                end = end - 0.5 * searchRange;
+                continue;
+            }
+        }
+        else
+        {
+            // Minimum is right of end
+            if (last - alpha < 0)
+            {
+                start = start + searchRange;
+                end = end + searchRange;
+            }
+
+            // Minimum is left of end
+            else
+            {
+                start = start + 0.5 * searchRange;
+                continue;
+            }
+        }
+    }
+    return start;
+}

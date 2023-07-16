@@ -13,16 +13,16 @@
 using namespace std;
 using namespace cv;
 
-template <typename T>
-__global__ void calculateWeights(const T *in, const double *kernel, double *sumWeights, double *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
+template <typename T, typename F>
+__global__ void calculateWeights(const T *in, const F *kernel, F *sumWeights, F *avg, int rows, int cols, int searchRadius, int neighborRadius, double sigma)
 {
-    const double h = 1 * sigma;
+    const F h = 1 * sigma;
 
     const size_t searchDiam = 2 * searchRadius + 1;
 
     const size_t threadNum = blockIdx.x * blockDim.x + threadIdx.x;
 
-    const size_t row = threadNum / (cols *searchDiam * searchDiam); 
+    const size_t row = threadNum / (cols * searchDiam * searchDiam);
     const size_t col = (threadNum / (searchDiam * searchDiam)) % cols;
 
     const size_t sRow = threadNum % (searchDiam * searchDiam) / searchDiam; // 0 <= sRow < 21 for searchRadius =10
@@ -37,7 +37,7 @@ __global__ void calculateWeights(const T *in, const double *kernel, double *sumW
 
     const size_t inCols = cols + 2 * padding;
 
-    double sum = 0;
+    F sum = 0;
 
     const int neighborDiam = neighborRadius * 2 + 1;
     for (int y = 0; y < neighborDiam; y++)
@@ -49,31 +49,39 @@ __global__ void calculateWeights(const T *in, const double *kernel, double *sumW
             const int iNghbrIdx = inCols * (paddedRow + y - neighborRadius) + paddedCol + x - neighborRadius;
             const int jNghbrIdx = inCols * (paddedSRow + y - neighborRadius) + paddedSCol + x - neighborRadius;
 
-            sum += pow(in[iNghbrIdx] - in[jNghbrIdx], 2) * kernel[kernelIdx];
+            const F diff = in[iNghbrIdx] - in[jNghbrIdx];
+            sum += diff * diff * kernel[kernelIdx];
         }
     }
-    double weight = exp(-sum / (h * h));
-    double res = weight * in[paddedSRow * inCols + paddedSCol];
+    F weight = exp(-sum / (h * h));
+    F res = weight * in[paddedSRow * inCols + paddedSCol];
 
     atomicAdd(&sumWeights[row * cols + col], weight);
     atomicAdd(&avg[row * cols + col], res);
 }
 
-template <typename T>
-__global__ void denoiseStep(double *sumWeights, double *avg, T *out, const int rows, const int cols)
+template <typename T, typename F>
+__global__ void denoiseStep(F *sumWeights, F *avg, T *out, const int rows, const int cols)
 {
     const int threadNum = blockIdx.x * blockDim.x + threadIdx.x;
 
     out[threadNum] = avg[threadNum] / sumWeights[threadNum];
 }
 
-template void cnlmcuda(const Mat &noisyImage, Mat &denoised, const short sigma, const int searchRadius, const int neighborRadius);
+template void cnlmcuda(const Mat &noisyImage, Mat &denoised, const uint8_t sigma, const int searchRadius, const int neighborRadius);
+template void cnlmcuda(const Mat &noisyImage, Mat &denoised, const int32_t sigma, const int searchRadius, const int neighborRadius);
 template void cnlmcuda(const Mat &noisyImage, Mat &denoised, const float sigma, const int searchRadius, const int neighborRadius);
 template void cnlmcuda(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
 
 template <typename T>
 void cnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius)
 {
+    /**
+     * Determine the float precision for intermediate results based on the size of T
+     */
+    constexpr bool useFloat = sizeof(T) <= sizeof(float);
+    using F = typename std::conditional<useFloat, float, double>::type; 
+
     assert(noisyImage.type() == cv::DataType<T>::type);
     assert(noisyImage.dims == 2);
 
@@ -89,39 +97,39 @@ void cnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int sea
     paddedImage = paddedImage.reshape(0, 1, paddedFlat);
     T *h_in = (T *)paddedImage.data;
 
-    vector<double> gaussKernel;
+    vector<F> gaussKernel;
     makeGaussianKernel(gaussKernel, neighborRadius);
-    double *h_kernel = gaussKernel.data();
+    F *h_kernel = gaussKernel.data();
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
     const int searchDiam = 2 * searchRadius + 1;
 
     const int totalThreads = rows * cols * searchDiam * searchDiam;
-    const int threadsPerBlock = 32; // Should be multiple of 32 (warp size). Empirically 32 seems the fastest, though there is little variation.
+    const int threadsPerBlock = 64; // Should be multiple of 32 (warp size). Empirically 32 seems the fastest, though there is little variation.
     const int numBlocks = ceil((double)totalThreads / threadsPerBlock);
 
     dim3 blocks(numBlocks);
     dim3 threads(threadsPerBlock);
 
     T *d_in, *d_out;
-    double *d_kernel;
+    F *d_kernel;
     const size_t inSize = paddedImage.total() * paddedImage.channels() * paddedImage.elemSize();
     cudaMalloc(&d_in, inSize);
     assert(d_in != NULL);
     cudaMemcpyAsync(d_in, h_in, inSize, cudaMemcpyHostToDevice);
 
-    cudaMalloc(&d_kernel, numNeighbors * sizeof(double));
+    cudaMalloc(&d_kernel, numNeighbors * sizeof(F));
     assert(d_kernel != NULL);
-    cudaMemcpyAsync(d_kernel, h_kernel, numNeighbors * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpyAsync(d_kernel, h_kernel, numNeighbors * sizeof(F), cudaMemcpyHostToDevice);
 
-    double *d_sumWeights, *d_avg;
-    cudaMalloc(&d_sumWeights, rows * cols * sizeof(double));
+    F *d_sumWeights, *d_avg;
+    cudaMalloc(&d_sumWeights, rows * cols * sizeof(F));
     assert(d_sumWeights != NULL);
-    cudaMemsetAsync(d_sumWeights, 0, rows * cols * sizeof(double));
+    cudaMemsetAsync(d_sumWeights, 0, rows * cols * sizeof(F));
 
-    cudaMalloc(&d_avg, rows * cols * sizeof(double));
+    cudaMalloc(&d_avg, rows * cols * sizeof(F));
     assert(d_avg != NULL);
-    cudaMemsetAsync(d_avg, 0, rows * cols * sizeof(double));
+    cudaMemsetAsync(d_avg, 0, rows * cols * sizeof(F));
 
     // Allocate output array
     const int flatShape[] = {rows * cols};
@@ -129,7 +137,7 @@ void cnlmcuda(const Mat &noisyImage, Mat &denoised, const T sigma, const int sea
     T *h_out = (T *)denoised.data;
 
     cudaDeviceSynchronize();
-    calculateWeights<T><<<blocks, threads>>>(d_in, d_kernel, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
+    calculateWeights<T, F><<<blocks, threads>>>(d_in, d_kernel, d_sumWeights, d_avg, rows, cols, searchRadius, neighborRadius, sigma);
 
     const size_t outSize = denoised.total() * denoised.channels() * denoised.elemSize();
     cudaMalloc(&d_out, outSize);

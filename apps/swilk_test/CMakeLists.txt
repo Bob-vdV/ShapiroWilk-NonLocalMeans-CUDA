@@ -5,7 +5,6 @@ add_compile_options(-lm)
 
 set_target_properties(swilk_test PROPERTIES
  CUDA_SEPARABLE_COMPILATION ON
- CUDA_RUNTIME_LIBRARY Shared
  )
 
 target_link_libraries(swilk_test 

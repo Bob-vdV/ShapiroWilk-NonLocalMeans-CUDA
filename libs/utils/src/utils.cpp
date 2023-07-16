@@ -8,8 +8,17 @@
 using namespace std;
 using namespace cv;
 
-double computePSNR(const Mat &baseImage, const Mat &changedImage, const double max = 255.0)
+template double computePSNR<uint8_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computePSNR<int32_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computePSNR<float>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computePSNR<double>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+
+template <typename T>
+double computePSNR(const Mat &baseImage, const Mat &changedImage, const double max)
 {
+    assert(baseImage.type() == cv::DataType<T>::type);
+    assert(changedImage.type() == cv::DataType<T>::type);
+
     const int numChannels = baseImage.channels();
 
     Mat difference;
@@ -28,10 +37,13 @@ double computePSNR(const Mat &baseImage, const Mat &changedImage, const double m
     return psnr;
 }
 
-template double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeSSIM<uint8_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeSSIM<int32_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeSSIM<float>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeSSIM<double>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
 
 template <typename T>
-double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const T max)
+double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max)
 {
     assert(baseImage.type() == cv::DataType<T>::type);
     assert(changedImage.type() == cv::DataType<T>::type);
@@ -74,15 +86,19 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const 
     return (luminance * contrast * structure + 1) / 2;
 }
 
-template void testNLM(const string filename, const short sigma, const int searchRadius, const int neighborRadius, NLMFunction_short nlmFunction, const bool showImg);
-template void testNLM(const string filename, const float sigma, const int searchRadius, const int neighborRadius, NLMFunction_float nlmFunction, const bool showImg);
-template void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction_double nlmFunction, const bool showImg);
+template void testNLM(const string filename, const uint8_t sigma, const int searchRadius, const int neighborRadius, NLMFunction<uint8_t> nlmFunction, const bool showImg);
+template void testNLM(const string filename, const int32_t sigma, const int searchRadius, const int neighborRadius, NLMFunction<int32_t> nlmFunction, const bool showImg);
+template void testNLM(const string filename, const float sigma, const int searchRadius, const int neighborRadius, NLMFunction<float> nlmFunction, const bool showImg);
+template void testNLM(const string filename, const double sigma, const int searchRadius, const int neighborRadius, NLMFunction<double> nlmFunction, const bool showImg);
 
 template <typename T, typename Function>
 void testNLM(const string filename, const T sigma, const int searchRadius, const int neighborRadius, Function nlmFunction, const bool showImg)
 {
     // Ensure that program runs sequentially
     cv::setNumThreads(1);
+
+    // Fix the seed to a constant
+    cv::theRNG().state = 42;
 
     Mat inputImage = imread(filename);
     cvtColor(inputImage, inputImage, COLOR_RGB2GRAY);
@@ -101,7 +117,7 @@ void testNLM(const string filename, const T sigma, const int searchRadius, const
     noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
     floatImage.convertTo(floatImage, cv::DataType<T>::type);
 
-    cout << "Noisy image PSNR: " << computePSNR(floatImage, noisyImage) << '\n';
+    cout << "Noisy image PSNR: " << computePSNR<T>(floatImage, noisyImage) << '\n';
 
     const chrono::system_clock::time_point start = chrono::high_resolution_clock::now();
 
@@ -113,7 +129,7 @@ void testNLM(const string filename, const T sigma, const int searchRadius, const
 
     cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
 
-    const double denoisedPSNR = computePSNR(floatImage, denoised);
+    const double denoisedPSNR = computePSNR<T>(floatImage, denoised);
     cout << "Denoised image PSNR: " << denoisedPSNR << '\n';
 
     if (showImg)

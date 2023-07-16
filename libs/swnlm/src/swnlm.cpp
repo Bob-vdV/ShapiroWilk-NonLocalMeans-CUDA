@@ -6,42 +6,55 @@
 using namespace std;
 using namespace cv;
 
-void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius)
+template void swnlm(const Mat &noisyImage, Mat &denoised, const uint8_t sigma, const int searchRadius, const int neighborRadius);
+template void swnlm(const Mat &noisyImage, Mat &denoised, const int32_t sigma, const int searchRadius, const int neighborRadius);
+template void swnlm(const Mat &noisyImage, Mat &denoised, const float sigma, const int searchRadius, const int neighborRadius);
+template void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int searchRadius, const int neighborRadius);
+
+template <typename T>
+void swnlm(const Mat &noisyImage, Mat &denoised, const T sigma, const int searchRadius, const int neighborRadius)
 {
-    assert(noisyImage.type() == CV_64FC1);
+    using SWType = float;
+
+    assert(noisyImage.type() == cv::DataType<T>::type);
     assert(noisyImage.dims == 2);
 
     const int rows = noisyImage.rows;
     const int cols = noisyImage.cols;
 
-    double alpha = 0.05; // threshold  for accepting null hypothesis. Typically is 0.05 for statistics
+    const SWType alpha = 0.05; // threshold  for accepting null hypothesis. Typically is 0.05 for statistics
 
     // Pad the edges with a reflection of the outer pixels.
     const int padding = searchRadius + neighborRadius;
     Mat paddedImage;
     copyMakeBorder(noisyImage, paddedImage, padding, padding, padding, padding, BORDER_REFLECT);
 
-    const int paddedFlat[] = {(int) paddedImage.total()};
+    const int paddedFlat[] = {(int)paddedImage.total()};
     paddedImage = paddedImage.reshape(0, 1, paddedFlat);
-    double *in = (double *)paddedImage.data;
+    T *in = (T *)paddedImage.data;
 
     const int numNeighbors = (neighborRadius * 2 + 1) * (neighborRadius * 2 + 1);
 
-    vector<double> a_vec(numNeighbors / 2 + 1);
-    double *a = a_vec.data();
+    vector<SWType> a_vec(numNeighbors / 2 + 1);
+    SWType *a = a_vec.data();
     ShapiroWilk::setup(a, numNeighbors);
+
+    const SWType threshold = ShapiroWilk::findThreshold(alpha, numNeighbors);
 
     const int flatShape[] = {rows * cols};
     denoised.create(1, flatShape, noisyImage.type());
-    double *denoisedOut = (double *)denoised.data;
+    T *denoisedOut = (T *)denoised.data;
+
+    vector<SWType> diff_vec(numNeighbors);
+    SWType *diff = diff_vec.data();
 
     for (int row = padding; row < rows + padding; row++)
     {
         for (int col = padding; col < cols + padding; col++)
         {
-            double Wmax = 0;
-            double avg = 0;
-            double sumWeights = 0;
+            SWType Wmax = 0;
+            SWType avg = 0;
+            SWType sumWeights = 0;
 
             for (int sRow = row - searchRadius; sRow <= row + searchRadius; sRow++)
             {
@@ -52,7 +65,6 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
                         continue;
                     }
 
-                    double *diff = new double[numNeighbors];
                     const int neighborDiam = neighborRadius * 2 + 1;
                     for (int y = 0; y < neighborDiam; y++)
                     {
@@ -66,38 +78,38 @@ void swnlm(const Mat &noisyImage, Mat &denoised, const double sigma, const int s
                         }
                     }
 
-                    double w, pw;
-                    ShapiroWilk::test(diff, a, numNeighbors, w, pw);
+                    SWType w;
+                    ShapiroWilk::test(diff, a, numNeighbors, w);
 
-                    // cout << w << '\t' << pw << '\n';
-                    double mean = 0;
-                    for (int i = 0; i < numNeighbors; i++)
+                    if (w > threshold)
                     {
-                        mean += diff[i];
-                    }
-                    mean /= numNeighbors;
+                        // Fail to reject Null hypothesis that it is not normally distributed
+                        SWType mean = 0;
+                        for (int i = 0; i < numNeighbors; i++)
+                        {
+                            mean += diff[i];
+                        }
+                        mean /= numNeighbors;
 
-                    double stddev = 0;
-                    for (int i = 0; i < numNeighbors; i++)
-                    {
-                        stddev += (diff[i] - mean) * (diff[i] - mean);
-                    }
-                    stddev /= numNeighbors;
-                    stddev = sqrt(stddev);
+                        SWType stddev = 0;
+                        for (int i = 0; i < numNeighbors; i++)
+                        {
+                            stddev += (diff[i] - mean) * (diff[i] - mean);
+                        }
+                        stddev /= numNeighbors;
+                        stddev = sqrt(stddev);
 
-                    delete[] diff;
+                        SWType stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
 
-                    double stderror = stddev / neighborDiam; // Neighborhoods are square, thus sqrt(n) observations is number of rows
+                        if (stderror > mean && mean > -stderror &&
+                            (1 + stderror > stddev && stddev > 1 - stderror))
+                        {
+                            Wmax = max(w, Wmax);
 
-                    if (stderror > mean && mean > -stderror &&
-                        (1 + stderror > stddev && stddev > 1 - stderror) &&
-                        (pw > alpha)) // Fail to reject Null hypothesis that it is not normally distributed
-                    {
-                        Wmax = max(w, Wmax);
+                            sumWeights += w;
 
-                        sumWeights += w;
-
-                        avg += w * in[(2 * padding + cols) * sRow + sCol];
+                            avg += w * in[(2 * padding + cols) * sRow + sCol];
+                        }
                     }
                 }
             }

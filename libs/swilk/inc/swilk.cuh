@@ -30,16 +30,20 @@
 #include <algorithm>
 #include <cstddef>
 #include <cuda_runtime.h>
-// #include <cuda.h>
 #include <iostream>
 #include <vector>
 #include <math.h>
 
 namespace ShapiroWilk
 {
-    void setup(double *a, const int size);
+    template <typename T>
+    void setup(T *a, const int size);
 
-    __host__ __device__ void test(double *x, const double *a, const int size, double &w, double &pw);
+    template <typename T>
+    T findThreshold(const T alpha, const int n);
+
+    template <typename T>
+    __host__ __device__ void test(T *x, const T *a, const int size, T &w);
 
 };
 

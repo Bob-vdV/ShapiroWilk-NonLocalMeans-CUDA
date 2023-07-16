@@ -3,7 +3,8 @@ add_executable(cuTest
 )
 
 set_target_properties(cuTest PROPERTIES
- CUDA_SEPARABLE_COMPILATION ON)
+ CUDA_SEPARABLE_COMPILATION ON
+ )
 
 target_link_libraries(cuTest 
     cudaTest

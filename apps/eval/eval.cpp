@@ -60,10 +60,11 @@ void writeResult(ofstream &resultsFile, const string &image, const double &sigma
     resultsFile << image << ',' << sigmaStr << ',' << algorithm << ',' << searchRadiusStr << ',' << neighborRadiusStr << ',' << psnrStr << ',' << ssimStr << ',' << execTimeStr << '\n';
 }
 
+template <typename T>
 void test(
     const vector<string> &images,
-    const vector<DenoiseAlgorithm<NLMFunction_double>> &algorithms,
-    const vector<double> &sigmas,
+    const vector<DenoiseAlgorithm<NLMFunction<T>>> &algorithms,
+    const vector<T> &sigmas,
     const vector<int> &searchRadii,
     const vector<int> &neighborRadii,
     const size_t repetitions,
@@ -74,11 +75,9 @@ void test(
     int totalResults = images.size() * algorithms.size() * sigmas.size() * searchRadii.size() * neighborRadii.size();
     int currentRes = 1;
 
-
     ofstream resultsFile;
     resultsFile.open(outputDir + "results.csv");
     resultsFile << "image,sigma,algorithm,search radius,neighbor radius,psnr,SSIM,execution time (s)\n";
-
 
     auto testStart = chrono::high_resolution_clock::now();
     for (auto imagePath : images)
@@ -104,7 +103,7 @@ void test(
 
         Mat noise = inputImage.clone();
         Mat noisyImage = inputImage.clone();
-        for (const double &sigma : sigmas)
+        for (const T &sigma : sigmas)
         {
             cout << "\tsigma= " << sigma << '\n';
 
@@ -112,8 +111,8 @@ void test(
             noisyImage = inputImage + noise;
 
             saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_noisy", noisyImage);
-            double psnr = computePSNR(inputImage, noisyImage, maxVal);
-            double ssim = computeSSIM(inputImage, noisyImage, maxVal);
+            double psnr = computePSNR<T>(inputImage, noisyImage, maxVal);
+            double ssim = computeSSIM<T>(inputImage, noisyImage, maxVal);
             writeResult(resultsFile, imageName, sigma, 0, 0, "noisy", psnr, ssim, NAN);
 
             for (const int &searchRadius : searchRadii)
@@ -123,7 +122,6 @@ void test(
                 for (const int &neighborRadius : neighborRadii)
                 {
                     cout << "\t\tneighborRadius:" << neighborRadius << '\n';
-
 
                     for (const auto &algorithm : algorithms)
                     {
@@ -147,8 +145,8 @@ void test(
                         }
 
                         saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_searchRadius=" + to_string(searchRadius) + "_neighborRadius=" + to_string(neighborRadius) + "_denoiser=" + algorithm.name, denoisedImage);
-                        psnr = computePSNR(inputImage, denoisedImage, maxVal);
-                        ssim = computeSSIM(inputImage, denoisedImage, maxVal);
+                        psnr = computePSNR<T>(inputImage, denoisedImage, maxVal);
+                        ssim = computeSSIM<T>(inputImage, denoisedImage, maxVal);
                         writeResult(resultsFile, imageName, sigma, searchRadius, neighborRadius, algorithm.name, psnr, ssim, minTime);
 
                         cout << "\tPSNR: " << psnr << "\tSSIM: " << ssim << "\texec Time:" << minTime << '\n';
@@ -158,7 +156,7 @@ void test(
                         int testsLeft = totalResults - currentRes;
                         double timePerResult = testDuration / currentRes;
 
-                        cout << "Time left (s): " << testsLeft * timePerResult << '\n'; 
+                        cout << "Time left (s): " << testsLeft * timePerResult << '\n';
                         currentRes++;
                     }
                 }
@@ -169,8 +167,15 @@ void test(
     resultsFile.close();
 }
 
-int main()
+template <typename T>
+void runTests()
 {
+    // Ensure that program runs sequentially
+    cv::setNumThreads(1);
+
+    // Fix the seed to a constant
+    cv::theRNG().state = 42;
+
     const string imageDir("../../../images/standard/");
     const string outputDir("../../../output/standard2/");
 
@@ -185,17 +190,22 @@ int main()
     }
 
     // Add functions to test
-    vector<DenoiseAlgorithm<NLMFunction_double>> algorithms = {
-        DenoiseAlgorithm("swnlm", &swnlm),
-        DenoiseAlgorithm("cnlm", &cnlm),
-        DenoiseAlgorithm("swnlm_cuda", &swnlmcuda<double>),
-        DenoiseAlgorithm("cnlm_cuda", &cnlmcuda<double>)};
+    vector<DenoiseAlgorithm<NLMFunction<T>>> algorithms = {
+        DenoiseAlgorithm("swnlm", &swnlm<T>),
+        DenoiseAlgorithm("cnlm", &cnlm<T>),
+        DenoiseAlgorithm("swnlm_cuda", &swnlmcuda<T>),
+        DenoiseAlgorithm("cnlm_cuda", &cnlmcuda<T>)};
 
-    vector<double> sigmas = {10, 20, 30, 40, 50, 60};
+    vector<T> sigmas = {10, 20, 30, 40, 50, 60};
     vector<int> searchRadii = {5, 8, 10};
     vector<int> neighborRadii = {1, 2, 3};
 
     const size_t repetitions = 3;
 
-    test(images, algorithms, sigmas, searchRadii, neighborRadii, repetitions, outputDir);
+    test<T>(images, algorithms, sigmas, searchRadii, neighborRadii, repetitions, outputDir);
+}
+
+int main()
+{
+    runTests<uint8_t>();
 }

@@ -3,6 +3,7 @@
 
 #include <vector>
 
-void makeGaussianKernel(std::vector<double> &gaussKernel, const int neighborRadius);
+template <typename F>
+void makeGaussianKernel(std::vector<F> &gaussKernel, const int neighborRadius);
 
 #endif
