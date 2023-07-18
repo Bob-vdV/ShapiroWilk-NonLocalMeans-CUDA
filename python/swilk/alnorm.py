@@ -206,7 +206,7 @@ def main():
     )
 
     plt.savefig("pw.png")
-    plt.savefig("pw.svg")
+    plt.savefig("pw.svg", bbox_inches='tight',pad_inches = 0)
     plt.show()
 
     print(findMin(start, end, alpha, wrapper))
