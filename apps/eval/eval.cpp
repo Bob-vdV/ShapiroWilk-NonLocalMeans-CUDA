@@ -32,7 +32,6 @@ struct DenoiseAlgorithm
  */
 void saveImage(const string outputFile, const Mat &image)
 {
-    assert(image.type() == CV_64FC1);
     Mat converted;
     image.convertTo(converted, CV_8UC1);
     cv::imwrite(outputFile + ".png", converted);
@@ -109,8 +108,12 @@ void test(
 
             randn(noise, 0, sigma);
             noisyImage = inputImage + noise;
+            noisyImage = cv::min(cv::max(noisyImage, 0), maxVal);
 
             saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_noisy", noisyImage);
+
+            noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
+
             double psnr = computePSNR<T>(inputImage, noisyImage, maxVal);
             double ssim = computeSSIM<T>(inputImage, noisyImage, maxVal);
             writeResult(resultsFile, imageName, sigma, 0, 0, "noisy", psnr, ssim, NAN);
@@ -177,7 +180,7 @@ void runTests()
     cv::theRNG().state = 42;
 
     const string imageDir("../../../images/standard/");
-    const string outputDir("../../../output/standard2/");
+    const string outputDir("../../../output/test1/");
 
     // Create output directory
     filesystem::create_directory(outputDir);
