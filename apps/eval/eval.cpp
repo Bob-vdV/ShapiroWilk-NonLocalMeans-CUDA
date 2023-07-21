@@ -76,7 +76,7 @@ void test(
 
     ofstream resultsFile;
     resultsFile.open(outputDir + "results.csv");
-    resultsFile << "image,sigma,algorithm,search radius,neighbor radius,psnr,SSIM,execution time (s)\n";
+    resultsFile << "image,sigma,algorithm,search radius,neighbor radius,psnr,MSSIM,execution time (s)\n";
 
     auto testStart = chrono::high_resolution_clock::now();
     for (auto imagePath : images)
@@ -89,7 +89,7 @@ void test(
             cv::cvtColor(inputImage, inputImage, cv::COLOR_RGB2GRAY);
         }
         assert(inputImage.channels() == 1);
-        inputImage.convertTo(inputImage, CV_64FC1);
+        inputImage.convertTo(inputImage, cv::DataType<T>::type);
 
         string imageName = imagePath.substr(imagePath.find_last_of("/") + 1); // Get filename
         imageName = imageName.substr(0, imageName.find_last_of('.'));         // Strip extension
@@ -104,7 +104,7 @@ void test(
         Mat noisyImage = inputImage.clone();
         for (const T &sigma : sigmas)
         {
-            cout << "\tsigma= " << sigma << '\n';
+            cout << "\tsigma= " << (double)sigma << '\n';
 
             randn(noise, 0, sigma);
             noisyImage = inputImage + noise;
@@ -115,8 +115,8 @@ void test(
             noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
 
             double psnr = computePSNR<T>(inputImage, noisyImage, maxVal);
-            double ssim = computeSSIM<T>(inputImage, noisyImage, maxVal);
-            writeResult(resultsFile, imageName, sigma, 0, 0, "noisy", psnr, ssim, NAN);
+            double mssim = computeMSSIM<T>(inputImage, noisyImage, maxVal);
+            writeResult(resultsFile, imageName, sigma, 0, 0, "noisy", psnr, mssim, NAN);
 
             for (const int &searchRadius : searchRadii)
             {
@@ -149,10 +149,10 @@ void test(
 
                         saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_searchRadius=" + to_string(searchRadius) + "_neighborRadius=" + to_string(neighborRadius) + "_denoiser=" + algorithm.name, denoisedImage);
                         psnr = computePSNR<T>(inputImage, denoisedImage, maxVal);
-                        ssim = computeSSIM<T>(inputImage, denoisedImage, maxVal);
-                        writeResult(resultsFile, imageName, sigma, searchRadius, neighborRadius, algorithm.name, psnr, ssim, minTime);
+                        mssim = computeMSSIM<T>(inputImage, denoisedImage, maxVal);
+                        writeResult(resultsFile, imageName, sigma, searchRadius, neighborRadius, algorithm.name, psnr, mssim, minTime);
 
-                        cout << "\tPSNR: " << psnr << "\tSSIM: " << ssim << "\texec Time:" << minTime << '\n';
+                        cout << "\tPSNR: " << psnr << "\tMSSIM: " << mssim << "\texec Time:" << minTime << '\n';
 
                         auto currentTime = chrono::high_resolution_clock::now();
                         double testDuration = chrono::duration_cast<chrono::seconds>(currentTime - testStart).count();

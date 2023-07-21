@@ -12,6 +12,9 @@ double computePSNR(const cv::Mat &baseImage, const cv::Mat &changedImage, const 
 template<typename T>
 double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max = 255);
 
+template <typename T>
+double computeMSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max = 255);
+
 template <typename T, typename Function>
 void testNLM(const std::string filename, const T sigma, const int searchRadius, const int neighborRadius, Function nlmFunction, const bool showImg = true);
 

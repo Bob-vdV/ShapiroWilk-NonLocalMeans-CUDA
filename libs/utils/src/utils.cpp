@@ -86,6 +86,93 @@ double computeSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const 
     return (luminance * contrast * structure + 1) / 2;
 }
 
+template double computeMSSIM<uint8_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeMSSIM<int32_t>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeMSSIM<float>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+template double computeMSSIM<double>(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max);
+
+template <typename T>
+double computeMSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const double max)
+{
+    assert(baseImage.type() == cv::DataType<T>::type);
+    assert(changedImage.type() == cv::DataType<T>::type);
+
+    // Default values according to wikipedia
+    const double k1 = 0.01;
+    const double k2 = 0.03;
+
+    const double c1 = std::pow(k1 * max, 2);
+    const double c2 = std::pow(k2 * max, 2);
+    const double c3 = c2 / 2;
+
+    const int windowWidth = 8;
+    const int n = windowWidth * windowWidth;
+
+    double mssim = 0;
+
+    for (int row = 0; row < baseImage.rows - windowWidth; row++)
+    {
+        for (int col = 0; col < baseImage.cols - windowWidth; col++)
+        {
+            double baseMean = 0;
+            double changedMean = 0;
+
+            for (int y = row; y < row + windowWidth; y++)
+            {
+                for (int x = col; x < col + windowWidth; x++)
+                {
+                    baseMean += baseImage.at<T>(x, y);
+                    changedMean += changedImage.at<T>(x, y);
+                }
+            }
+            baseMean /= n;
+            changedMean /= n;
+
+            double baseStddev = 0;
+            double changedStddev = 0;
+            for (int y = row; y < row + windowWidth; y++)
+            {
+                for (int x = col; x < col + windowWidth; x++)
+                {
+                    baseStddev += ((double)baseImage.at<T>(x, y) - baseMean) * ((double)baseImage.at<T>(x, y) - baseMean);
+                    changedStddev += ((double)changedImage.at<T>(x, y) - changedMean) * ((double)changedImage.at<T>(x, y) - changedMean);
+                }
+            }
+            baseStddev /= n;
+            changedStddev /= n;
+
+            baseStddev = sqrt(baseStddev);
+            changedStddev = sqrt(changedStddev);
+
+            const double baseVariance = baseStddev * baseStddev;
+            const double changedVariance = changedStddev * changedStddev;
+
+            double covariance = 0;
+
+            for (int y = row; y < row + windowWidth; y++)
+            {
+                for (int x = col; x < col + windowWidth; x++)
+                {
+                    covariance += ((double)baseImage.at<T>(x, y) - baseMean) * ((double)changedImage.at<T>(x, y) - changedMean);
+                }
+            }
+            covariance = covariance / (windowWidth * windowWidth);
+
+            const double luminance = (2 * (baseMean * changedMean) + c1) / (baseMean * baseMean + changedMean * changedMean + c1);
+
+            const double contrast = (2 * baseVariance * changedVariance + c2) / (baseVariance * baseVariance + changedVariance * changedVariance + c2);
+
+            const double structure = (covariance + c3) / (baseStddev * changedStddev + c3);
+
+            const double ssim = (luminance * contrast * structure);
+            mssim += ssim;
+        }
+    }
+
+    mssim = mssim / ((baseImage.rows - windowWidth) * (baseImage.cols - windowWidth));
+    return (mssim + 1) / 2;
+}
+
 template void testNLM(const string filename, const uint8_t sigma, const int searchRadius, const int neighborRadius, NLMFunction<uint8_t> nlmFunction, const bool showImg);
 template void testNLM(const string filename, const int32_t sigma, const int searchRadius, const int neighborRadius, NLMFunction<int32_t> nlmFunction, const bool showImg);
 template void testNLM(const string filename, const float sigma, const int searchRadius, const int neighborRadius, NLMFunction<float> nlmFunction, const bool showImg);
@@ -117,7 +204,11 @@ void testNLM(const string filename, const T sigma, const int searchRadius, const
     noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
     floatImage.convertTo(floatImage, cv::DataType<T>::type);
 
-    cout << "Noisy image PSNR: " << computePSNR<T>(floatImage, noisyImage) << '\n';
+    const double noisyPSNR = computePSNR<T>(floatImage, noisyImage);
+    const double noisySSIM = computeSSIM<T>(floatImage, noisyImage);
+    const double noisyMSSIM = computeMSSIM<T>(floatImage, noisyImage);
+
+    cout << "Noisy image PSNR: " << noisyPSNR << "\tSSIM: " << noisySSIM << "\tMSSIM: " << noisyMSSIM << '\n';
 
     const chrono::system_clock::time_point start = chrono::high_resolution_clock::now();
 
@@ -130,7 +221,10 @@ void testNLM(const string filename, const T sigma, const int searchRadius, const
     cout << "Finished in " << elapsed_seconds.count() << " seconds\n";
 
     const double denoisedPSNR = computePSNR<T>(floatImage, denoised);
-    cout << "Denoised image PSNR: " << denoisedPSNR << '\n';
+    const double denoisedSSIM = computeSSIM<T>(floatImage, denoised);
+    const double denoisedMSSIM = computeMSSIM<T>(floatImage, denoised);
+
+    cout << "Denoised image PSNR: " << denoisedPSNR << "\tSSIM: " << denoisedSSIM << "\tMSSIM: " << denoisedMSSIM << '\n';
 
     if (showImg)
     {
