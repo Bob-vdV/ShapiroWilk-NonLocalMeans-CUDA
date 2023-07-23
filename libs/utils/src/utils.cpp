@@ -170,7 +170,7 @@ double computeMSSIM(const cv::Mat &baseImage, const cv::Mat &changedImage, const
     }
 
     mssim = mssim / ((baseImage.rows - windowWidth) * (baseImage.cols - windowWidth));
-    return (mssim + 1) / 2;
+    return mssim;
 }
 
 template void testNLM(const string filename, const uint8_t sigma, const int searchRadius, const int neighborRadius, NLMFunction<uint8_t> nlmFunction, const bool showImg);

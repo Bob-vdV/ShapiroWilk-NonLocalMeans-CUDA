@@ -100,19 +100,18 @@ void test(
 
         cout << "Evaluating " << imageName << "...\n";
 
-        Mat noise = inputImage.clone();
+        Mat noise(inputImage.rows, inputImage.cols, CV_64F);
+
         Mat noisyImage = inputImage.clone();
+
         for (const T &sigma : sigmas)
         {
             cout << "\tsigma= " << (double)sigma << '\n';
 
             randn(noise, 0, sigma);
-            noisyImage = inputImage + noise;
-            noisyImage = cv::min(cv::max(noisyImage, 0), maxVal);
+            cv::add(inputImage, noise, noisyImage, noArray(), cv::DataType<T>::type);
 
             saveImage(outputImagePath + "_sigma=" + to_string(sigma) + "_noisy", noisyImage);
-
-            noisyImage.convertTo(noisyImage, cv::DataType<T>::type);
 
             double psnr = computePSNR<T>(inputImage, noisyImage, maxVal);
             double mssim = computeMSSIM<T>(inputImage, noisyImage, maxVal);
@@ -179,8 +178,8 @@ void runTests()
     // Fix the seed to a constant
     cv::theRNG().state = 42;
 
-    const string imageDir("../../../images/standard/");
-    const string outputDir("../../../output/test1/");
+    const string imageDir("../../../images/quick/");
+    const string outputDir("../../../output/quick/");
 
     // Create output directory
     filesystem::create_directory(outputDir);
