@@ -178,8 +178,8 @@ void runTests()
     // Fix the seed to a constant
     cv::theRNG().state = 42;
 
-    const string imageDir("../../../images/quick/");
-    const string outputDir("../../../output/quick/");
+    const string imageDir("../../../images/standard/");
+    const string outputDir("../../../output/test2/");
 
     // Create output directory
     filesystem::create_directory(outputDir);
