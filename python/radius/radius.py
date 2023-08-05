@@ -77,7 +77,7 @@ def main():
             )
             i += 1
 
-        plt.title(alg)
+        #plt.title(alg)
         plt.xlabel("comparisons per pixel")
         plt.ylabel("execution time (s)")
         legend1 = plt.legend(title="search\nradius", loc="upper left")
