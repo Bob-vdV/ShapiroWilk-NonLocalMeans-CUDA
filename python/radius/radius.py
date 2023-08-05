@@ -93,7 +93,7 @@ def main():
         plt.legend(*legendSizes, title="neighborhood\nradius", loc="lower right")
         plt.gca().add_artist(legend1)
 
-        plt.savefig(f"execTimesRadius{alg}.svg")
+        plt.savefig(f"execTimesRadius{alg}.svg", bbox_inches="tight", pad_inches=0)
 
 
 if __name__ == "__main__":
