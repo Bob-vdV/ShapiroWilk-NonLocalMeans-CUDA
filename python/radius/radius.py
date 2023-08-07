@@ -3,16 +3,20 @@ from mpl_toolkits.axes_grid1 import Divider, Size
 import matplotlib as mpl
 
 import numpy as np
-def set_size(w,h, ax=None):
-    """ w, h: width, height in inches """
-    if not ax: ax=plt.gca()
+
+
+def set_size(w, h, ax=None):
+    """w, h: width, height in inches"""
+    if not ax:
+        ax = plt.gca()
     l = ax.figure.subplotpars.left
     r = ax.figure.subplotpars.right
     t = ax.figure.subplotpars.top
     b = ax.figure.subplotpars.bottom
-    figw = float(w)/(r-l)
-    figh = float(h)/(t-b)
+    figw = float(w) / (r - l)
+    figh = float(h) / (t - b)
     ax.figure.set_size_inches(figw, figh)
+
 
 def main():
     Sradii = np.array([5, 8, 10])
@@ -69,18 +73,12 @@ def main():
     sizeMult = 20
 
     for alg in timings:
-        #set_size(5, 5)
-        
-        
+        # set_size(5, 5)
+
         plt.figure()
 
         fig, ax = plt.subplots()
         fig.set_size_inches(8, 4.8)
-
-
-
-
-        
 
         i = 0
         for Sradius in Sradii:
@@ -116,7 +114,9 @@ def main():
         plt.legend(*legendSizes, title="neighborhood\nradius", loc="lower right")
         plt.gca().add_artist(legend1)
 
-        ax.yaxis.set_major_formatter(lambda y, pos: "{:x>6}".format(f"{y:.2f}").replace('x', ' ') )
+        ax.yaxis.set_major_formatter(
+            lambda y, pos: "{:x>6}".format(f"{y:.2f}").replace("x", " ")
+        )
 
         plt.savefig(f"execTimesRadius{alg}.svg", bbox_inches="tight", pad_inches=0)
 
