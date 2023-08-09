@@ -18,7 +18,10 @@ def main():
 
             cv.imwrite(image + alg + "diff" + png, diff)
 
-            cv.imwrite(image + alg + "absdiff" + png, diff * 255)
+            thresh = 0
+            im_bw = cv.threshold(diff, thresh, 255, cv.THRESH_BINARY)[1]
+            cv.imwrite(image + alg + "absdiff" + png, im_bw)
+
 
 
 if __name__ == "__main__":
