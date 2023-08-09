@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    filename = "C:/Users/Bob/Documents/Uni/BachelorThesis/NonLocalMeans/python/polyu/polyUExecTimes.csv"  # "polyUExecTimes.csv"
+    filename = "C:/Users/Bob/Documents/Uni/BachelorThesis/NonLocalMeans/python/polyu/polyUExecTimes.csv"
 
     data = np.genfromtxt(filename, delimiter=",", dtype=str)
 
