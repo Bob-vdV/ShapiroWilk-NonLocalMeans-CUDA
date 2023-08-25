@@ -19,6 +19,8 @@ def main():
         imageData = data[np.where(data[:, 0] == image)]
 
         plt.figure()
+        ax = plt.axes()
+
         plt.yscale("log")
         plt.title(image)
 
@@ -31,9 +33,14 @@ def main():
             execTimes = algData[:, 3].astype(np.double)
             resolutions = algData[:, 1]
 
-            plt.plot(resolutions, execTimes, label=alg, marker="o")
+            ax.plot(resolutions, execTimes, label=alg, marker="o")
 
-        plt.legend(title="algorithm")
+        handles, labels = ax.get_legend_handles_labels()
+
+        handles = [handles[2], handles[0], handles[3], handles[1]]
+        labels = [labels[2], labels[0], labels[3], labels[1]]
+
+        ax.legend(handles, labels, title="algorithm")
 
         plt.savefig(f"polyUExecTime{image}.svg", bbox_inches="tight", pad_inches=0)
 
