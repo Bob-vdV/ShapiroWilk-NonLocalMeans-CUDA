@@ -5,5 +5,3 @@ add_subdirectory(swilk)
 add_subdirectory(swnlm)
 add_subdirectory(swnlm_cuda)
 add_subdirectory(utils)
-
-add_subdirectory(cudatest)
